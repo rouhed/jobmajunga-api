@@ -1,0 +1,85 @@
+const CV = require('../models/cvModel');
+
+exports.getMyCVs = async (req, res) => {
+    try {
+        const cvs = await CV.getAllByUserId(req.user.id);
+        res.json(cvs);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error fetching CVs' });
+    }
+};
+
+exports.createCV = async (req, res) => {
+    try {
+        const cv = await CV.create(req.user.id, req.body);
+        res.status(201).json(cv);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error creating CV' });
+    }
+};
+
+exports.getCVDetail = async (req, res) => {
+    try {
+        const cv = await CV.getById(req.params.id, req.user.id);
+        if (!cv) return res.status(404).json({ error: 'CV not found' });
+
+        const sections = await CV.getSections(req.params.id);
+        res.json({ ...cv, sections });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error fetching CV details' });
+    }
+};
+
+exports.updateCV = async (req, res) => {
+    try {
+        const { title, template_name, is_default, sections } = req.body;
+        await CV.update(req.params.id, req.user.id, { title, templateName: template_name, isDefault: is_default });
+
+        if (sections) {
+            await CV.updateSections(req.params.id, sections);
+        }
+
+        res.json({ message: 'CV updated successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error updating CV' });
+    }
+};
+
+exports.deleteCV = async (req, res) => {
+    try {
+        await CV.delete(req.params.id, req.user.id);
+        res.json({ message: 'CV deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error deleting CV' });
+    }
+};
+
+exports.duplicateCV = async (req, res) => {
+    try {
+        const newCv = await CV.duplicate(req.params.id, req.user.id);
+        res.status(201).json(newCv);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error duplicating CV' });
+    }
+};
+
+const PDFService = require('../services/pdfService');
+const Profile = require('../models/profileModel');
+
+exports.exportPDF = async (req, res) => {
+    try {
+        const cv = await CV.getById(req.params.id, req.user.id);
+        if (!cv) return res.status(404).json({ error: 'CV not found' });
+
+        const sections = await CV.getSections(req.params.id);
+        const profile = await Profile.getByUserId(req.user.id);
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=cv_${req.params.id}.pdf`);
+
+        await PDFService.generateCV({ ...cv, sections }, profile, res);
+    } catch (error) {
+        console.error('PDF Export Error:', error);
+        res.status(500).json({ error: 'Server error exporting PDF' });
+    }
+};
