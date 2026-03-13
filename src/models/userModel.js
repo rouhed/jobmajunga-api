@@ -24,7 +24,7 @@ class User {
     static async createCandidateProfile(userId, { firstName, lastName, phone, title, location }) {
         await pool.execute(
             'INSERT INTO candidate_profiles (user_id, first_name, last_name, phone, title, location) VALUES (?, ?, ?, ?, ?, ?)',
-            [userId, firstName, lastName, phone, title, location]
+            [userId, firstName || null, lastName || null, phone || null, title || null, location || null]
         );
     }
 
@@ -34,7 +34,7 @@ class User {
 
         await pool.execute(
             'INSERT INTO recruiter_profiles (user_id, company_name, sector, website, description) VALUES (?, ?, ?, ?, ?)',
-            [userId, finalCompanyName, sector, website, description]
+            [userId, finalCompanyName || null, sector || null, website || null, description || null]
         );
     }
 
