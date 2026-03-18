@@ -12,7 +12,11 @@ class Profile {
 
     static async update(userId, role, data) {
         if (role === 'recruiter') {
-            const { name, sector, website, description, photo_url } = data;
+            const name = data.name ?? null;
+            const sector = data.sector ?? null;
+            const website = data.website ?? null;
+            const description = data.description ?? null;
+            const photo_url = data.photo_url ?? null;
             
             await pool.execute(
                 `INSERT INTO recruiter_profiles (user_id, name, sector, website, description, photo_url, updated_at)
@@ -27,7 +31,13 @@ class Profile {
                 [userId, name, sector, website, description, photo_url]
             );
         } else {
-            const { firstName, lastName, phone, title, bio, location, photo_url } = data;
+            const firstName = data.first_name ?? null;
+            const lastName = data.last_name ?? null;
+            const phone = data.phone ?? null;
+            const title = data.title ?? null;
+            const bio = data.bio ?? null;
+            const location = data.location ?? null;
+            const photo_url = data.photo_url ?? null;
             await pool.execute(
                 `INSERT INTO candidate_profiles (user_id, first_name, last_name, phone, title, bio, location, photo_url, updated_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
