@@ -29,12 +29,11 @@ class User {
     }
 
     static async createRecruiterProfile(userId, data) {
-        const { companyName, company_name, sector, website, description } = data;
-        const finalCompanyName = companyName || company_name;
+        const { name, sector, website, description } = data;
 
         await pool.execute(
-            'INSERT INTO recruiter_profiles (user_id, company_name, sector, website, description) VALUES (?, ?, ?, ?, ?)',
-            [userId, finalCompanyName || null, sector || null, website || null, description || null]
+            'INSERT INTO recruiter_profiles (user_id, name, sector, website, description) VALUES (?, ?, ?, ?, ?)',
+            [userId, name || null, sector || null, website || null, description || null]
         );
     }
 

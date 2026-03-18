@@ -1,5 +1,24 @@
 const Job = require('../models/jobModel');
 const pool = require('../config/db');
+const bcrypt = require('bcryptjs');
+const Profile = require('../models/profileModel');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Multer Config for Photo
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadDir = 'uploads/photos';
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'photo-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+const upload = multer({ storage }).single('photo');
 
 // Recruiter: Create job
 exports.createJob = async (req, res) => {
@@ -109,4 +128,73 @@ exports.getDashboardStats = async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Erreur Dashboard' });
     }
+};
+
+// Update password
+exports.updatePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        const [rows] = await pool.execute('SELECT password FROM users WHERE id = ?', [req.user.id]);
+        const user = rows[0];
+
+        if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+            return res.status(401).json({ error: 'Ancien mot de passe incorrect' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await pool.execute('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.id]);
+        res.json({ message: 'Mot de passe mis à jour avec succès' });
+    } catch (error) {
+        res.status(500).json({ error: 'Erreur lors de la mise à jour du mot de passe' });
+    }
+};
+
+// Profile management
+exports.getProfile = async (req, res) => {
+    try {
+        const [rows] = await pool.execute(
+            `SELECT rp.*, u.email 
+             FROM recruiter_profiles rp
+             JOIN users u ON rp.user_id = u.id
+             WHERE rp.user_id = ?`,
+            [req.user.id]
+        );
+        
+        if (rows.length === 0) {
+            // If profile doesn't exist yet, return user email and placeholder
+            const [userRows] = await pool.execute('SELECT email FROM users WHERE id = ?', [req.user.id]);
+            return res.json({ 
+                name: "Nom à définir", 
+                email: userRows[0]?.email || "Email non trouvé",
+                photo_url: null 
+            });
+        }
+        res.json(rows[0]);
+    } catch (error) {
+        res.status(500).json({ error: 'Erreur profile', details: error.message });
+    }
+};
+
+exports.updateProfile = async (req, res) => {
+    try {
+        const profile = await Profile.update(req.user.id, 'recruiter', req.body);
+        res.json(profile);
+    } catch (error) {
+        res.status(500).json({ error: 'Erreur mise à jour profile', details: error.message });
+    }
+};
+
+exports.uploadPhoto = (req, res) => {
+    upload(req, res, async (err) => {
+        if (err) return res.status(500).json({ error: 'Erreur upload', details: err.message });
+        if (!req.file) return res.status(400).json({ error: 'Aucun fichier' });
+
+        const photoUrl = `/uploads/photos/${req.file.filename}`;
+        try {
+            await pool.execute('UPDATE recruiter_profiles SET photo_url = ? WHERE user_id = ?', [photoUrl, req.user.id]);
+            res.json({ photo_url: photoUrl });
+        } catch (error) {
+            res.status(500).json({ error: 'Erreur BDD photo', details: error.message });
+        }
+    });
 };

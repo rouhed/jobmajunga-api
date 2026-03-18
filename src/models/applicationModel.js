@@ -11,7 +11,7 @@ class Application {
 
     static async getByCandidate(candidateId) {
         const [rows] = await pool.execute(
-            `SELECT a.*, jo.title as job_title, jo.contract_type, rp.company_name 
+            `SELECT a.*, jo.title as job_title, jo.contract_type, rp.name 
        FROM applications a 
        JOIN job_offers jo ON a.job_offer_id = jo.id 
        JOIN recruiter_profiles rp ON jo.recruiter_id = rp.user_id 

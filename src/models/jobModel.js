@@ -1,37 +1,37 @@
 const pool = require('../config/db');
 
 class Job {
-    static async getAll({ search, type, location, minSalary }) {
-        let query = 'SELECT jo.*, rp.company_name, rp.logo_url FROM job_offers jo JOIN recruiter_profiles rp ON jo.recruiter_id = rp.user_id WHERE jo.status = "published"';
-        const params = [];
+    static async findAll(filters) {
+        let query = 'SELECT jo.*, rp.name, rp.photo_url FROM job_offers jo JOIN recruiter_profiles rp ON jo.recruiter_id = rp.user_id WHERE jo.status = "published"';
+        const queryParams = [];
 
-        if (search) {
+        if (filters.search) {
             query += ' AND (jo.title LIKE ? OR jo.description LIKE ?)';
-            params.push(`%${search}%`, `%${search}%`);
+            queryParams.push(`%${filters.search}%`, `%${filters.search}%`);
         }
 
-        if (type) {
+        if (filters.type) {
             query += ' AND jo.contract_type = ?';
-            params.push(type);
+            queryParams.push(filters.type);
         }
 
-        if (location) {
+        if (filters.location) {
             query += ' AND jo.location LIKE ?';
-            params.push(`%${location}%`);
+            queryParams.push(`%${filters.location}%`);
         }
 
-        if (minSalary) {
+        if (filters.minSalary) {
             query += ' AND jo.salary_max >= ?';
-            params.push(minSalary);
+            queryParams.push(filters.minSalary);
         }
 
         query += ' ORDER BY jo.created_at DESC';
-        const [rows] = await pool.execute(query, params);
+        const [rows] = await pool.execute(query, queryParams);
         return rows;
     }
 
-    static async getById(id) {
-        const query = 'SELECT jo.*, rp.company_name, rp.logo_url, rp.sector, rp.description as company_desc FROM job_offers jo JOIN recruiter_profiles rp ON jo.recruiter_id = rp.user_id WHERE jo.id = ?';
+    static async findById(id) {
+        const query = 'SELECT jo.*, rp.name, rp.photo_url, rp.sector, rp.description as company_desc FROM job_offers jo JOIN recruiter_profiles rp ON jo.recruiter_id = rp.user_id WHERE jo.id = ?';
         const [rows] = await pool.execute(query, [id]);
 
         if (rows.length > 0) {
