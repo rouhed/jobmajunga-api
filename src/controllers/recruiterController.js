@@ -19,10 +19,11 @@ exports.createJob = async (req, res) => {
         const finalStatus = status && ['draft', 'published', 'expired', 'archived'].includes(status) ? status : 'published';
         
         const [result] = await pool.execute(
-            `INSERT INTO job_offers (recruiter_id, title, description, contract_type, location, salary_min, salary_max, requirements, required_skills, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO job_offers (recruiter_id, created_by_user_id, title, description, contract_type, location, salary_min, salary_max, requirements, required_skills, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 companyId, 
+                req.user.id,
                 title, 
                 description, 
                 contractType, 
@@ -46,11 +47,16 @@ exports.getMyJobs = async (req, res) => {
     try {
         const companyId = req.user.parent_id || req.user.id;
         const [rows] = await pool.execute(
-            'SELECT * FROM job_offers WHERE recruiter_id = ? ORDER BY created_at DESC',
+            `SELECT jo.*, u.email as publisher_email 
+             FROM job_offers jo 
+             LEFT JOIN users u ON jo.created_by_user_id = u.id 
+             WHERE jo.recruiter_id = ? 
+             ORDER BY jo.created_at DESC`,
             [companyId]
         );
         res.json(rows);
     } catch (error) {
+        console.error('[getMyJobs] Error:', error);
         res.status(500).json({ error: 'Erreur lors du chargement des offres' });
     }
 };
