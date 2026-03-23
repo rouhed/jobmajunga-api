@@ -28,4 +28,9 @@ router.put('/applications/:id/status', rc.updateApplicationStatus);
 // Password
 router.put('/password', rc.updatePassword);
 
+// Sub-users
+router.get('/sub-users', rc.getSubUsers);
+router.post('/sub-users', rc.createSubUser);
+router.delete('/sub-users/:id', rc.deleteSubUser);
+
 module.exports = router;

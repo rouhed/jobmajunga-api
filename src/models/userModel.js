@@ -17,8 +17,17 @@ class User {
     }
 
     static async findById(id) {
-        const [rows] = await pool.execute('SELECT id, email, role, is_active FROM users WHERE id = ?', [id]);
+        const [rows] = await pool.execute('SELECT id, email, role, is_active, parent_id FROM users WHERE id = ?', [id]);
         return rows[0];
+    }
+
+    static async createSubUser({ email, password, role, parentId }) {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const [result] = await pool.execute(
+            'INSERT INTO users (email, password, role, parent_id) VALUES (?, ?, ?, ?)',
+            [email, hashedPassword, role, parentId]
+        );
+        return result.insertId;
     }
 
     static async createCandidateProfile(userId, { firstName, lastName, phone, title, location }) {

@@ -5,7 +5,7 @@ require('dotenv').config();
 
 const generateTokens = (user) => {
     const accessToken = jwt.sign(
-        { id: user.id, role: user.role },
+        { id: user.id, role: user.role, parent_id: user.parent_id },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN }
     );
@@ -77,7 +77,7 @@ exports.login = async (req, res) => {
         await User.saveRefreshToken(user.id, refreshToken, expiresAt);
 
         res.json({
-            user: { id: user.id, email: user.email, role: user.role },
+            user: { id: user.id, email: user.email, role: user.role, parent_id: user.parent_id },
             accessToken,
             refreshToken
         });

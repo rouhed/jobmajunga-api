@@ -23,11 +23,12 @@ const upload = multer({ storage }).single('photo');
 // Recruiter: Create job
 exports.createJob = async (req, res) => {
     try {
+        const companyId = req.user.parent_id || req.user.id;
         const { title, description, contractType, location, salaryMin, salaryMax, requirements, skills } = req.body;
         const [result] = await pool.execute(
             `INSERT INTO job_offers (recruiter_id, title, description, contract_type, location, salary_min, salary_max, requirements, required_skills, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published')`,
-            [req.user.id, title, description, contractType, location, salaryMin, salaryMax, requirements, skills]
+            [companyId, title, description, contractType, location, salaryMin, salaryMax, requirements, skills]
         );
         res.status(201).json({ id: result.insertId, message: 'Offre créée avec succès' });
     } catch (error) {
@@ -38,9 +39,10 @@ exports.createJob = async (req, res) => {
 // Recruiter: Get my jobs
 exports.getMyJobs = async (req, res) => {
     try {
+        const companyId = req.user.parent_id || req.user.id;
         const [rows] = await pool.execute(
             'SELECT * FROM job_offers WHERE recruiter_id = ? ORDER BY created_at DESC',
-            [req.user.id]
+            [companyId]
         );
         res.json(rows);
     } catch (error) {
@@ -51,11 +53,12 @@ exports.getMyJobs = async (req, res) => {
 // Recruiter: Update job
 exports.updateJob = async (req, res) => {
     try {
+        const companyId = req.user.parent_id || req.user.id;
         const { title, description, contractType, location, salaryMin, salaryMax, status } = req.body;
         await pool.execute(
             `UPDATE job_offers SET title=?, description=?, contract_type=?, location=?, salary_min=?, salary_max=?, status=?, updated_at=NOW()
        WHERE id=? AND recruiter_id=?`,
-            [title, description, contractType, location, salaryMin, salaryMax, status, req.params.id, req.user.id]
+            [title, description, contractType, location, salaryMin, salaryMax, status, req.params.id, companyId]
         );
         res.json({ message: 'Offre mise à jour' });
     } catch (error) {
@@ -66,7 +69,8 @@ exports.updateJob = async (req, res) => {
 // Recruiter: Delete job
 exports.deleteJob = async (req, res) => {
     try {
-        await pool.execute('DELETE FROM job_offers WHERE id=? AND recruiter_id=?', [req.params.id, req.user.id]);
+        const companyId = req.user.parent_id || req.user.id;
+        await pool.execute('DELETE FROM job_offers WHERE id=? AND recruiter_id=?', [req.params.id, companyId]);
         res.json({ message: 'Offre supprimée' });
     } catch (error) {
         res.status(500).json({ error: 'Erreur lors de la suppression' });
@@ -76,6 +80,7 @@ exports.deleteJob = async (req, res) => {
 // Recruiter: Get applications for my jobs
 exports.getReceivedApplications = async (req, res) => {
     try {
+        const companyId = req.user.parent_id || req.user.id;
         const [rows] = await pool.execute(
             `SELECT a.*, jo.title as job_title, cp.first_name, cp.last_name, cp.phone, u.email 
        FROM applications a
@@ -84,7 +89,7 @@ exports.getReceivedApplications = async (req, res) => {
        JOIN users u ON a.candidate_id = u.id
        WHERE jo.recruiter_id = ?
        ORDER BY a.created_at DESC`,
-            [req.user.id]
+            [companyId]
         );
         res.json(rows);
     } catch (error) {
@@ -106,18 +111,19 @@ exports.updateApplicationStatus = async (req, res) => {
 // Dashboard stats
 exports.getDashboardStats = async (req, res) => {
     try {
-        const [[jobCount]] = await pool.execute('SELECT COUNT(*) as count FROM job_offers WHERE recruiter_id = ?', [req.user.id]);
+        const companyId = req.user.parent_id || req.user.id;
+        const [[jobCount]] = await pool.execute('SELECT COUNT(*) as count FROM job_offers WHERE recruiter_id = ?', [companyId]);
         const [[appCount]] = await pool.execute(
             `SELECT COUNT(*) as count FROM applications a JOIN job_offers jo ON a.job_offer_id = jo.id WHERE jo.recruiter_id = ?`,
-            [req.user.id]
+            [companyId]
         );
         const [[pendingCount]] = await pool.execute(
             `SELECT COUNT(*) as count FROM applications a JOIN job_offers jo ON a.job_offer_id = jo.id WHERE jo.recruiter_id = ? AND a.status = 'pending'`,
-            [req.user.id]
+            [companyId]
         );
         const [[interviewCount]] = await pool.execute(
             `SELECT COUNT(*) as count FROM applications a JOIN job_offers jo ON a.job_offer_id = jo.id WHERE jo.recruiter_id = ? AND a.status = 'interview'`,
-            [req.user.id]
+            [companyId]
         );
         res.json({
             totalJobs: jobCount.count,
@@ -152,18 +158,19 @@ exports.updatePassword = async (req, res) => {
 // Profile management
 exports.getProfile = async (req, res) => {
     try {
-        console.log(`[getProfile] userId=${req.user.id}`);
+        const companyId = req.user.parent_id || req.user.id;
+        console.log(`[getProfile] userId=${req.user.id}, companyId=${companyId}`);
         const [rows] = await pool.execute(
             `SELECT rp.*, u.email 
              FROM recruiter_profiles rp
              JOIN users u ON rp.user_id = u.id
              WHERE rp.user_id = ?`,
-            [req.user.id]
+            [companyId]
         );
         
         if (rows.length === 0) {
             // If profile doesn't exist yet, return user email and placeholder
-            const [userRows] = await pool.execute('SELECT email FROM users WHERE id = ?', [req.user.id]);
+            const [userRows] = await pool.execute('SELECT email FROM users WHERE id = ?', [companyId]);
             return res.json({ 
                 name: "Nom à définir", 
                 email: userRows[0]?.email || "Email non trouvé",
@@ -179,6 +186,9 @@ exports.getProfile = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
     try {
+        if (req.user.parent_id) {
+            return res.status(403).json({ error: 'Seulement l\'administrateur principal peut modifier le profil.' });
+        }
         console.log(`[updateProfile] userId=${req.user.id}, body=`, JSON.stringify(req.body));
         const profile = await Profile.update(req.user.id, 'recruiter', req.body);
         res.json(profile);
@@ -189,6 +199,9 @@ exports.updateProfile = async (req, res) => {
 };
 
 exports.uploadPhoto = (req, res) => {
+    if (req.user.parent_id) {
+        return res.status(403).json({ error: 'Seulement l\'administrateur principal peut modifier la photo.' });
+    }
     upload(req, res, async (err) => {
         if (err) return res.status(500).json({ error: 'Erreur upload', details: err.message });
         if (!req.file) return res.status(400).json({ error: 'Aucun fichier' });
@@ -201,4 +214,51 @@ exports.uploadPhoto = (req, res) => {
             res.status(500).json({ error: 'Erreur BDD photo', details: error.message });
         }
     });
+};
+
+// Sub-users Management
+exports.getSubUsers = async (req, res) => {
+    try {
+        if (req.user.parent_id) return res.status(403).json({ error: 'Accès refusé' });
+        
+        const [rows] = await pool.execute(
+            'SELECT id, email, created_at FROM users WHERE parent_id = ? AND role = "recruiter" ORDER BY created_at DESC',
+            [req.user.id]
+        );
+        res.json(rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Erreur lors du chargement des utilisateurs' });
+    }
+};
+
+exports.createSubUser = async (req, res) => {
+    try {
+        if (req.user.parent_id) return res.status(403).json({ error: 'Accès refusé' });
+        
+        const { email, password } = req.body;
+        
+        const [existing] = await pool.execute('SELECT id FROM users WHERE email = ?', [email]);
+        if (existing.length > 0) return res.status(400).json({ error: 'Cet email est déjà utilisé' });
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const [result] = await pool.execute(
+            'INSERT INTO users (email, password, role, parent_id) VALUES (?, ?, ?, ?)',
+            [email, hashedPassword, 'recruiter', req.user.id]
+        );
+        
+        res.status(201).json({ id: result.insertId, message: 'Utilisateur créé avec succès' });
+    } catch (error) {
+        res.status(500).json({ error: 'Erreur lors de la création de l\'utilisateur' });
+    }
+};
+
+exports.deleteSubUser = async (req, res) => {
+    try {
+        if (req.user.parent_id) return res.status(403).json({ error: 'Accès refusé' });
+        
+        await pool.execute('DELETE FROM users WHERE id = ? AND parent_id = ?', [req.params.id, req.user.id]);
+        res.json({ message: 'Utilisateur supprimé' });
+    } catch (error) {
+        res.status(500).json({ error: 'Erreur lors de la suppression' });
+    }
 };
