@@ -6,19 +6,9 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Multer Config for Photo
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadDir = 'uploads/photos';
-        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'photo-' + uniqueSuffix + path.extname(file.originalname));
-    }
-});
-const upload = multer({ storage }).single('photo');
+// Multer Config for Photo — memory storage (no disk writes for Render compatibility)
+const storage = multer.memoryStorage();
+const upload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 } }).single('photo');
 
 // Recruiter: Create job
 exports.createJob = async (req, res) => {
@@ -207,10 +197,14 @@ exports.uploadPhoto = (req, res) => {
         if (err) return res.status(500).json({ error: 'Erreur upload', details: err.message });
         if (!req.file) return res.status(400).json({ error: 'Aucun fichier' });
 
-        const photoUrl = `/uploads/photos/${req.file.filename}`;
+        // Convert image buffer to base64 data URI for persistent storage in DB
+        const mimeType = req.file.mimetype || 'image/png';
+        const base64 = req.file.buffer.toString('base64');
+        const dataUri = `data:${mimeType};base64,${base64}`;
+
         try {
-            await pool.execute('UPDATE recruiter_profiles SET photo_url = ? WHERE user_id = ?', [photoUrl, req.user.id]);
-            res.json({ photo_url: photoUrl });
+            await pool.execute('UPDATE recruiter_profiles SET photo_url = ? WHERE user_id = ?', [dataUri, req.user.id]);
+            res.json({ photo_url: dataUri });
         } catch (error) {
             res.status(500).json({ error: 'Erreur BDD photo', details: error.message });
         }
