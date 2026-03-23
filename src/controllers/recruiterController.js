@@ -13,16 +13,30 @@ const upload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 } }).single
 // Recruiter: Create job
 exports.createJob = async (req, res) => {
     try {
+        console.log('[createJob] Body:', JSON.stringify(req.body));
         const companyId = req.user.parent_id || req.user.id;
         const { title, description, contractType, location, salaryMin, salaryMax, requirements, skills, status } = req.body;
         const finalStatus = status && ['draft', 'published', 'expired', 'archived'].includes(status) ? status : 'published';
+        
         const [result] = await pool.execute(
             `INSERT INTO job_offers (recruiter_id, title, description, contract_type, location, salary_min, salary_max, requirements, required_skills, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [companyId, title, description, contractType, location, salaryMin, salaryMax, requirements, skills, finalStatus]
+            [
+                companyId, 
+                title, 
+                description, 
+                contractType, 
+                location, 
+                salaryMin ?? null, 
+                salaryMax ?? null, 
+                requirements ?? null, 
+                skills ?? null, 
+                finalStatus
+            ]
         );
         res.status(201).json({ id: result.insertId, message: 'Offre créée avec succès' });
     } catch (error) {
+        console.error('[createJob] Error:', error);
         res.status(500).json({ error: 'Erreur lors de la création', details: error.message });
     }
 };
