@@ -11,7 +11,7 @@ class Profile {
     }
 
     static async update(userId, role, data) {
-        console.log(`[Profile.update] userId=${userId}, role=${role}, data=`, JSON.stringify(data));
+        console.log(`[Profile.update] userId=${userId}, role=${role}, updating fields: ${Object.keys(data).join(', ')}`);
         
         if (role === 'recruiter') {
             const name = data.name ?? null;
