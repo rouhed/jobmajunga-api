@@ -36,9 +36,8 @@ class Profile {
                 if (website !== null && website !== undefined) { updateFields.push('website = ?'); updateValues.push(website); }
                 if (description !== null && description !== undefined) { updateFields.push('description = ?'); updateValues.push(description); }
                 if (photo_url !== null && photo_url !== undefined) { updateFields.push('photo_url = ?'); updateValues.push(photo_url); }
-                updateFields.push('updated_at = NOW()');
                 
-                if (updateFields.length > 1) { // more than just updated_at
+                if (updateFields.length > 0) {
                     updateValues.push(userId);
                     await pool.execute(
                         `UPDATE recruiter_profiles SET ${updateFields.join(', ')} WHERE user_id = ?`,
@@ -48,8 +47,8 @@ class Profile {
             } else {
                 // INSERT new profile
                 await pool.execute(
-                    `INSERT INTO recruiter_profiles (user_id, name, sector, website, description, photo_url, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+                    `INSERT INTO recruiter_profiles (user_id, name, sector, website, description, photo_url)
+                     VALUES (?, ?, ?, ?, ?, ?)`,
                     [userId, name, sector, website, description, photo_url]
                 );
             }
@@ -78,16 +77,15 @@ class Profile {
                      title = COALESCE(?, title),
                      bio = COALESCE(?, bio),
                      location = COALESCE(?, location),
-                     photo_url = COALESCE(?, photo_url),
-                     updated_at = NOW()
+                     photo_url = COALESCE(?, photo_url)
                      WHERE user_id = ?`,
                     [firstName, lastName, phone, title, bio, location, photo_url, userId]
                 );
             } else {
                 // INSERT new profile
                 await pool.execute(
-                    `INSERT INTO candidate_profiles (user_id, first_name, last_name, phone, title, bio, location, photo_url, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+                    `INSERT INTO candidate_profiles (user_id, first_name, last_name, phone, title, bio, location, photo_url)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                     [userId, firstName, lastName, phone, title, bio, location, photo_url]
                 );
             }
