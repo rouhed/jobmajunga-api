@@ -11,6 +11,8 @@ class Profile {
     }
 
     static async update(userId, role, data) {
+        console.log(`[Profile.update] userId=${userId}, role=${role}, data=`, JSON.stringify(data));
+        
         if (role === 'recruiter') {
             const name = data.name ?? null;
             const sector = data.sector ?? null;
@@ -18,18 +20,39 @@ class Profile {
             const description = data.description ?? null;
             const photo_url = data.photo_url ?? null;
             
-            await pool.execute(
-                `INSERT INTO recruiter_profiles (user_id, name, sector, website, description, photo_url, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, NOW())
-                 ON DUPLICATE KEY UPDATE 
-                 name = VALUES(name),
-                 sector = VALUES(sector),
-                 website = VALUES(website),
-                 description = VALUES(description),
-                 photo_url = IFNULL(VALUES(photo_url), photo_url),
-                 updated_at = NOW()`,
-                [userId, name, sector, website, description, photo_url]
+            // Check if profile already exists
+            const [existing] = await pool.execute(
+                'SELECT user_id FROM recruiter_profiles WHERE user_id = ?',
+                [userId]
             );
+            
+            if (existing.length > 0) {
+                // UPDATE existing profile
+                const updateFields = [];
+                const updateValues = [];
+                
+                if (name !== null && name !== undefined) { updateFields.push('name = ?'); updateValues.push(name); }
+                if (sector !== null && sector !== undefined) { updateFields.push('sector = ?'); updateValues.push(sector); }
+                if (website !== null && website !== undefined) { updateFields.push('website = ?'); updateValues.push(website); }
+                if (description !== null && description !== undefined) { updateFields.push('description = ?'); updateValues.push(description); }
+                if (photo_url !== null && photo_url !== undefined) { updateFields.push('photo_url = ?'); updateValues.push(photo_url); }
+                updateFields.push('updated_at = NOW()');
+                
+                if (updateFields.length > 1) { // more than just updated_at
+                    updateValues.push(userId);
+                    await pool.execute(
+                        `UPDATE recruiter_profiles SET ${updateFields.join(', ')} WHERE user_id = ?`,
+                        updateValues
+                    );
+                }
+            } else {
+                // INSERT new profile
+                await pool.execute(
+                    `INSERT INTO recruiter_profiles (user_id, name, sector, website, description, photo_url, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+                    [userId, name, sector, website, description, photo_url]
+                );
+            }
         } else {
             const firstName = data.first_name ?? null;
             const lastName = data.last_name ?? null;
@@ -38,20 +61,36 @@ class Profile {
             const bio = data.bio ?? null;
             const location = data.location ?? null;
             const photo_url = data.photo_url ?? null;
-            await pool.execute(
-                `INSERT INTO candidate_profiles (user_id, first_name, last_name, phone, title, bio, location, photo_url, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
-                 ON DUPLICATE KEY UPDATE 
-                 first_name = VALUES(first_name),
-                 last_name = VALUES(last_name),
-                 phone = VALUES(phone),
-                 title = VALUES(title),
-                 bio = VALUES(bio),
-                 location = VALUES(location),
-                 photo_url = IFNULL(VALUES(photo_url), photo_url),
-                 updated_at = NOW()`,
-                [userId, firstName, lastName, phone, title, bio, location, photo_url]
+            
+            // Check if profile already exists
+            const [existing] = await pool.execute(
+                'SELECT user_id FROM candidate_profiles WHERE user_id = ?',
+                [userId]
             );
+            
+            if (existing.length > 0) {
+                // UPDATE existing profile
+                await pool.execute(
+                    `UPDATE candidate_profiles SET 
+                     first_name = COALESCE(?, first_name),
+                     last_name = COALESCE(?, last_name),
+                     phone = COALESCE(?, phone),
+                     title = COALESCE(?, title),
+                     bio = COALESCE(?, bio),
+                     location = COALESCE(?, location),
+                     photo_url = COALESCE(?, photo_url),
+                     updated_at = NOW()
+                     WHERE user_id = ?`,
+                    [firstName, lastName, phone, title, bio, location, photo_url, userId]
+                );
+            } else {
+                // INSERT new profile
+                await pool.execute(
+                    `INSERT INTO candidate_profiles (user_id, first_name, last_name, phone, title, bio, location, photo_url, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+                    [userId, firstName, lastName, phone, title, bio, location, photo_url]
+                );
+            }
         }
         return this.getByUserId(userId, role);
     }

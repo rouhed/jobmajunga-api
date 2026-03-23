@@ -152,6 +152,7 @@ exports.updatePassword = async (req, res) => {
 // Profile management
 exports.getProfile = async (req, res) => {
     try {
+        console.log(`[getProfile] userId=${req.user.id}`);
         const [rows] = await pool.execute(
             `SELECT rp.*, u.email 
              FROM recruiter_profiles rp
@@ -171,15 +172,18 @@ exports.getProfile = async (req, res) => {
         }
         res.json(rows[0]);
     } catch (error) {
+        console.error(`[getProfile] ERROR:`, error);
         res.status(500).json({ error: 'Erreur profile', details: error.message });
     }
 };
 
 exports.updateProfile = async (req, res) => {
     try {
+        console.log(`[updateProfile] userId=${req.user.id}, body=`, JSON.stringify(req.body));
         const profile = await Profile.update(req.user.id, 'recruiter', req.body);
         res.json(profile);
     } catch (error) {
+        console.error(`[updateProfile] ERROR:`, error);
         res.status(500).json({ error: 'Erreur mise à jour profile', details: error.message });
     }
 };
