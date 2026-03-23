@@ -24,11 +24,12 @@ const upload = multer({ storage }).single('photo');
 exports.createJob = async (req, res) => {
     try {
         const companyId = req.user.parent_id || req.user.id;
-        const { title, description, contractType, location, salaryMin, salaryMax, requirements, skills } = req.body;
+        const { title, description, contractType, location, salaryMin, salaryMax, requirements, skills, status } = req.body;
+        const finalStatus = status && ['draft', 'published', 'expired', 'archived'].includes(status) ? status : 'published';
         const [result] = await pool.execute(
             `INSERT INTO job_offers (recruiter_id, title, description, contract_type, location, salary_min, salary_max, requirements, required_skills, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published')`,
-            [companyId, title, description, contractType, location, salaryMin, salaryMax, requirements, skills]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [companyId, title, description, contractType, location, salaryMin, salaryMax, requirements, skills, finalStatus]
         );
         res.status(201).json({ id: result.insertId, message: 'Offre créée avec succès' });
     } catch (error) {

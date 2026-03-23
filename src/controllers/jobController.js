@@ -3,7 +3,7 @@ const Job = require('../models/jobModel');
 exports.getJobs = async (req, res) => {
     try {
         const { search, type, location, minSalary } = req.query;
-        const jobs = await Job.getAll({ search, type, location, minSalary });
+        const jobs = await Job.findAll({ search, type, location, minSalary });
         res.json(jobs);
     } catch (error) {
         res.status(500).json({ error: 'Server error fetching jobs', details: error.message });
@@ -12,7 +12,7 @@ exports.getJobs = async (req, res) => {
 
 exports.getJobById = async (req, res) => {
     try {
-        const job = await Job.getById(req.params.id);
+        const job = await Job.findById(req.params.id);
         if (!job) {
             return res.status(404).json({ error: 'Job offer not found' });
         }
