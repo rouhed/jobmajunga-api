@@ -47,7 +47,7 @@ exports.getMyJobs = async (req, res) => {
     try {
         const companyId = req.user.parent_id || req.user.id;
         const [rows] = await pool.execute(
-            `SELECT jo.*, u.email as publisher_email, u.role as publisher_role, rp.logo_url as company_logo
+            `SELECT jo.*, u.email as publisher_email, u.role as publisher_role, rp.photo_url as company_logo
              FROM job_offers jo 
              LEFT JOIN users u ON jo.created_by_user_id = u.id 
              LEFT JOIN recruiter_profiles rp ON jo.recruiter_id = rp.user_id
