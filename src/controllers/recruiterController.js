@@ -10,30 +10,43 @@ const fs = require('fs');
 const storage = multer.memoryStorage();
 const upload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 } }).single('photo');
 
+// Helper: convert undefined to null for MySQL bind safety
+const safeNull = (val) => (val === undefined || val === '') ? null : val;
+
 // Recruiter: Create job
 exports.createJob = async (req, res) => {
     try {
         console.log('[createJob] Body:', JSON.stringify(req.body));
         const companyId = req.user.parent_id || req.user.id;
-        const { title, description, contractType, location, salaryMin, salaryMax, requirements, skills, status } = req.body;
-        const finalStatus = status && ['draft', 'published', 'expired', 'archived'].includes(status) ? status : 'published';
+        const title = safeNull(req.body.title);
+        const description = safeNull(req.body.description);
+        const contractType = safeNull(req.body.contractType || req.body.contract_type);
+        const location = safeNull(req.body.location);
+        const salaryMin = safeNull(req.body.salaryMin || req.body.salary_min);
+        const salaryMax = safeNull(req.body.salaryMax || req.body.salary_max);
+        const requirements = safeNull(req.body.requirements);
+        const skills = safeNull(req.body.skills || req.body.required_skills);
+        const rawStatus = safeNull(req.body.status);
+        const finalStatus = rawStatus && ['draft', 'published', 'expired', 'archived'].includes(rawStatus) ? rawStatus : 'published';
         
+        const params = [
+            companyId, 
+            req.user.id,
+            title, 
+            description, 
+            contractType, 
+            location, 
+            salaryMin, 
+            salaryMax, 
+            requirements, 
+            skills, 
+            finalStatus
+        ].map(p => p === undefined ? null : p);
+
         const [result] = await pool.execute(
             `INSERT INTO job_offers (recruiter_id, created_by_user_id, title, description, contract_type, location, salary_min, salary_max, requirements, required_skills, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                companyId, 
-                req.user.id,
-                title, 
-                description, 
-                contractType, 
-                location, 
-                salaryMin ?? null, 
-                salaryMax ?? null, 
-                requirements ?? null, 
-                skills ?? null, 
-                finalStatus
-            ]
+            params
         );
         res.status(201).json({ id: result.insertId, message: 'Offre créée avec succès' });
     } catch (error) {
@@ -66,7 +79,13 @@ exports.getMyJobs = async (req, res) => {
 exports.updateJob = async (req, res) => {
     try {
         const companyId = req.user.parent_id || req.user.id;
-        const { title, description, contractType, location, salaryMin, salaryMax, status } = req.body;
+        const title = req.body.title ?? null;
+        const description = req.body.description ?? null;
+        const contractType = req.body.contractType ?? req.body.contract_type ?? null;
+        const location = req.body.location ?? null;
+        const salaryMin = req.body.salaryMin ?? req.body.salary_min ?? null;
+        const salaryMax = req.body.salaryMax ?? req.body.salary_max ?? null;
+        const status = req.body.status ?? null;
         await pool.execute(
             `UPDATE job_offers SET title=?, description=?, contract_type=?, location=?, salary_min=?, salary_max=?, status=?, updated_at=NOW()
        WHERE id=? AND recruiter_id=?`,

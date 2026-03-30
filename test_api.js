@@ -1,37 +1,46 @@
-const axios = require('axios');
+const express = require('express');
+const mysql = require('mysql2/promise');
+require('dotenv').config();
 
-async function testApi() {
+const app = express();
+const pool = mysql.createPool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT || 3306,
+    ssl: { minVersion: 'TLSv1.2', rejectUnauthorized: true }
+});
+
+app.get('/test', async (req, res) => {
     try {
-        console.log("1. Logging in...");
-        const loginRes = await axios.post('https://jobmajunga-api.onrender.com/api/v1/auth/login', {
-            email: 'ami@gmail.com', // fallback credentials, hopefully one exists
-            password: 'password123'
-        }).catch(err => {
-            console.log("Failed ami. Trying kwan@gmail.com...");
-            return axios.post('https://jobmajunga-api.onrender.com/api/v1/auth/login', {
-                email: 'kwan@gmail.com',
-                password: 'password123'
-            });
-        });
-
-        const token = loginRes.data.token;
-        console.log("Logged in! Token acquired. Testing profile update...");
-
-        const updateRes = await axios.put('https://jobmajunga-api.onrender.com/api/v1/recruiter/profile', {
-            name: "TEST NAME ROUHED",
-            sector: "TEST SECTOR",
-            website: "",
-            description: "",
-            photo_url: null
-        }, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-
-        console.log("SUCCESS! API returned:", updateRes.status);
-        console.log(updateRes.data);
-    } catch (err) {
-        console.error("API Error Status:", err.response?.status);
-        console.error(err.response?.data);
+        const companyId = 1187185;
+        const [rows] = await pool.execute(
+            `SELECT jo.*, u.email as publisher_email, u.role as publisher_role, rp.photo_url as company_logo
+             FROM job_offers jo 
+             LEFT JOIN users u ON jo.created_by_user_id = u.id 
+             LEFT JOIN recruiter_profiles rp ON jo.recruiter_id = rp.user_id
+             WHERE jo.recruiter_id = ? 
+             ORDER BY jo.created_at DESC`,
+            [companyId]
+        );
+        res.json(rows);
+    } catch (error) {
+        console.error('BIG ERROR:', error);
+        res.status(500).json({ error: 'Erreur' });
     }
-}
-testApi();
+});
+
+const server = app.listen(0, async () => {
+    console.log('PORT:', server.address().port);
+    const http = require('http');
+    http.get('http://localhost:' + server.address().port + '/test', (r) => {
+        let d = '';
+        r.on('data', c => d+=c);
+        r.on('end', () => {
+            console.log('STATUS:', r.statusCode);
+            console.log('DATA:', d.substring(0, 500));
+            process.exit(0);
+        });
+    });
+});
