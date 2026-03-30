@@ -55,12 +55,13 @@ exports.createJob = async (req, res) => {
     }
 };
 
-// Recruiter: Get my jobs
+// Recruiter: Get my jobs (with application count)
 exports.getMyJobs = async (req, res) => {
     try {
         const companyId = req.user.parent_id || req.user.id;
         const [rows] = await pool.execute(
-            `SELECT jo.*, u.email as publisher_email, u.role as publisher_role, rp.photo_url as company_logo
+            `SELECT jo.*, u.email as publisher_email, u.role as publisher_role, rp.photo_url as company_logo,
+                    (SELECT COUNT(*) FROM applications a WHERE a.job_offer_id = jo.id) as applications_count
              FROM job_offers jo 
              LEFT JOIN users u ON jo.created_by_user_id = u.id 
              LEFT JOIN recruiter_profiles rp ON jo.recruiter_id = rp.user_id
@@ -108,34 +109,112 @@ exports.deleteJob = async (req, res) => {
     }
 };
 
-// Recruiter: Get applications for my jobs
+// Recruiter: Get applications for my jobs (enriched)
 exports.getReceivedApplications = async (req, res) => {
     try {
         const companyId = req.user.parent_id || req.user.id;
         const [rows] = await pool.execute(
-            `SELECT a.*, jo.title as job_title, cp.first_name, cp.last_name, cp.phone, u.email 
-       FROM applications a
-       JOIN job_offers jo ON a.job_offer_id = jo.id
-       JOIN candidate_profiles cp ON a.candidate_id = cp.user_id
-       JOIN users u ON a.candidate_id = u.id
-       WHERE jo.recruiter_id = ?
-       ORDER BY a.created_at DESC`,
+            `SELECT a.id, a.candidate_id, a.job_offer_id, a.cv_id, a.cover_letter, 
+                    a.status, a.recruiter_notes, a.interview_date,
+                    a.applied_at, a.updated_at as status_updated_at,
+                    jo.title as job_title, jo.contract_type as job_contract_type, jo.location as job_location,
+                    cp.first_name, cp.last_name, cp.phone, cp.title as candidate_title, cp.photo_url as candidate_photo,
+                    u.email
+             FROM applications a
+             JOIN job_offers jo ON a.job_offer_id = jo.id
+             JOIN candidate_profiles cp ON a.candidate_id = cp.user_id
+             JOIN users u ON a.candidate_id = u.id
+             WHERE jo.recruiter_id = ?
+             ORDER BY a.applied_at DESC`,
             [companyId]
         );
         res.json(rows);
     } catch (error) {
+        console.error('[getReceivedApplications] Error:', error);
         res.status(500).json({ error: 'Erreur lors du chargement des candidatures' });
     }
 };
 
-// Recruiter: Update application status
+// Recruiter: Update application status (with auto-archive on accept)
 exports.updateApplicationStatus = async (req, res) => {
     try {
-        const { status } = req.body;
-        await pool.execute('UPDATE applications SET status=?, updated_at=NOW() WHERE id=?', [status, req.params.id]);
+        const { status, interview_date, interview_location } = req.body;
+        const appId = req.params.id;
+
+        // Validate status
+        const validStatuses = ['sent', 'viewed', 'reviewing', 'interview', 'accepted', 'rejected'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ error: 'Statut invalide' });
+        }
+
+        // If scheduling an interview, update interview_date too
+        if (status === 'interview' && interview_date) {
+            await pool.execute(
+                'UPDATE applications SET status=?, interview_date=?, updated_at=NOW() WHERE id=?',
+                [status, interview_date, appId]
+            );
+        } else {
+            await pool.execute(
+                'UPDATE applications SET status=?, updated_at=NOW() WHERE id=?',
+                [status, appId]
+            );
+        }
+
+        // AUTO-ARCHIVE: When accepting a candidate, archive the job offer and reject other applications
+        if (status === 'accepted') {
+            // Get the job_offer_id for this application
+            const [[app]] = await pool.execute('SELECT job_offer_id FROM applications WHERE id=?', [appId]);
+            if (app) {
+                const jobId = app.job_offer_id;
+                
+                // Archive the job offer (it's now filled)
+                await pool.execute(
+                    "UPDATE job_offers SET status='archived', updated_at=NOW() WHERE id=?",
+                    [jobId]
+                );
+
+                // Auto-reject all other applications for this job
+                await pool.execute(
+                    "UPDATE applications SET status='rejected', updated_at=NOW() WHERE job_offer_id=? AND id!=? AND status NOT IN ('accepted', 'rejected')",
+                    [jobId, appId]
+                );
+
+                console.log(`[acceptApplication] Job ${jobId} archived, other applications rejected`);
+            }
+        }
+
         res.json({ message: 'Statut mis à jour' });
     } catch (error) {
+        console.error('[updateApplicationStatus] Error:', error);
         res.status(500).json({ error: 'Erreur lors de la mise à jour du statut' });
+    }
+};
+
+// Recruiter: Update recruiter notes on application
+exports.updateApplicationNotes = async (req, res) => {
+    try {
+        const { notes } = req.body;
+        await pool.execute(
+            'UPDATE applications SET recruiter_notes=?, updated_at=NOW() WHERE id=?',
+            [notes, req.params.id]
+        );
+        res.json({ message: 'Notes mises à jour' });
+    } catch (error) {
+        res.status(500).json({ error: 'Erreur lors de la mise à jour des notes' });
+    }
+};
+
+// Recruiter: Schedule interview
+exports.scheduleInterview = async (req, res) => {
+    try {
+        const { interview_date } = req.body;
+        await pool.execute(
+            "UPDATE applications SET status='interview', interview_date=?, updated_at=NOW() WHERE id=?",
+            [interview_date, req.params.id]
+        );
+        res.json({ message: 'Entretien planifié' });
+    } catch (error) {
+        res.status(500).json({ error: 'Erreur lors de la planification' });
     }
 };
 
@@ -149,7 +228,7 @@ exports.getDashboardStats = async (req, res) => {
             [companyId]
         );
         const [[pendingCount]] = await pool.execute(
-            `SELECT COUNT(*) as count FROM applications a JOIN job_offers jo ON a.job_offer_id = jo.id WHERE jo.recruiter_id = ? AND a.status = 'pending'`,
+            `SELECT COUNT(*) as count FROM applications a JOIN job_offers jo ON a.job_offer_id = jo.id WHERE jo.recruiter_id = ? AND a.status IN ('sent', 'viewed')`,
             [companyId]
         );
         const [[interviewCount]] = await pool.execute(

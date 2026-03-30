@@ -24,6 +24,8 @@ router.delete('/jobs/:id', rc.deleteJob);
 // Applications
 router.get('/applications', rc.getReceivedApplications);
 router.put('/applications/:id/status', rc.updateApplicationStatus);
+router.put('/applications/:id/notes', rc.updateApplicationNotes);
+router.put('/applications/:id/interview', rc.scheduleInterview);
 
 // Password
 router.put('/password', rc.updatePassword);
