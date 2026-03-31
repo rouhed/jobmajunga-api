@@ -61,6 +61,39 @@ class User {
     static async deleteRefreshToken(token) {
         await pool.execute('DELETE FROM refresh_tokens WHERE token = ?', [token]);
     }
+
+    static async saveResetCode(email, code) {
+        const expiresAt = new Date(Date.now() + 3600000); // 1 hour
+        await pool.execute(
+            'UPDATE users SET reset_code = ?, reset_code_expires_at = ? WHERE email = ?',
+            [code, expiresAt, email]
+        );
+    }
+
+    static async verifyResetCode(email, code) {
+        const [rows] = await pool.execute(
+            'SELECT * FROM users WHERE email = ? AND reset_code = ? AND reset_code_expires_at > NOW()',
+            [email, code]
+        );
+        return rows[0];
+    }
+
+    static async updatePassword(email, newPassword) {
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await pool.execute(
+            'UPDATE users SET password = ?, reset_code = NULL, reset_code_expires_at = NULL WHERE email = ?',
+            [hashedPassword, email]
+        );
+    }
+
+    static async findSubRecruiter(adminEmail, subEmail) {
+        const [rows] = await pool.execute(`
+            SELECT u.* FROM users u
+            JOIN users a ON u.parent_id = a.id
+            WHERE a.email = ? AND u.email = ? AND u.role = 'recruiter'
+        `, [adminEmail, subEmail]);
+        return rows[0];
+    }
 }
 
 module.exports = User;

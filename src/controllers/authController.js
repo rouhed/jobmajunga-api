@@ -125,3 +125,60 @@ exports.refresh = async (req, res) => {
         res.status(401).json({ error: 'Invalid refresh token' });
     }
 };
+
+exports.forgotPassword = async (req, res) => {
+    const { email } = req.body;
+    try {
+        const user = await User.findByEmail(email);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        await User.saveResetCode(email, code);
+        const EmailService = require('../services/emailService');
+        await EmailService.sendResetCode(email, code);
+
+        res.json({ message: 'Reset code sent successfully' });
+    } catch (error) {
+        console.error('FORGOT PASSWORD ERROR:', error);
+        res.status(500).json({ error: 'Server error during forgot password' });
+    }
+};
+
+exports.resetPassword = async (req, res) => {
+    const { email, code, password } = req.body;
+    try {
+        const user = await User.verifyResetCode(email, code);
+        if (!user) {
+            return res.status(400).json({ error: 'Invalid or expired code' });
+        }
+
+        await User.updatePassword(email, password);
+        res.json({ message: 'Password reset successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error during reset password' });
+    }
+};
+
+exports.recoverSubUser = async (req, res) => {
+    const { admin_email, sub_email } = req.body;
+    try {
+        const subUser = await User.findSubRecruiter(admin_email, sub_email);
+        if (!subUser) {
+            return res.status(404).json({ error: 'Collaborateur non trouvé ou non lié à cet administrateur' });
+        }
+
+        // Generate a random temporary password
+        const tempPassword = Math.random().toString(36).slice(-10);
+        await User.updatePassword(sub_email, tempPassword);
+
+        const EmailService = require('../services/emailService');
+        await EmailService.sendRecruiterRecoveryToAdmin(admin_email, sub_email, tempPassword);
+
+        res.json({ message: 'Les accès ont été envoyés à l\'administrateur' });
+    } catch (error) {
+        console.error('RECOVER SUB USER ERROR:', error);
+        res.status(500).json({ error: 'Erreur lors de la récupération du collaborateur' });
+    }
+};
