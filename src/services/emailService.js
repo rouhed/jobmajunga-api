@@ -1,7 +1,7 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-const transporter = nodemailer.createTransport({
+const transporter = (process.env.EMAIL_USER && process.env.EMAIL_PASS) ? nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: process.env.SMTP_PORT || 587,
     secure: process.env.SMTP_SECURE === 'true',
@@ -9,10 +9,17 @@ const transporter = nodemailer.createTransport({
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     }
-});
+}) : null;
 
 class EmailService {
     static async sendResetCode(email, code) {
+        if (!transporter) {
+            console.log('=========================================');
+            console.log(`[TEST MODE] Reset code for ${email}: ${code}`);
+            console.log('=========================================');
+            return { mock: true };
+        }
+        
         const mailOptions = {
             from: `"JobMajunga Support" <${process.env.EMAIL_USER}>`,
             to: email,
@@ -36,6 +43,15 @@ class EmailService {
     }
 
     static async sendRecruiterRecoveryToAdmin(adminEmail, subEmail, tempPassword) {
+        if (!transporter) {
+            console.log('=========================================');
+            console.log(`[TEST MODE] Recruiter Recovery for ${subEmail}`);
+            console.log(`Admin to notify: ${adminEmail}`);
+            console.log(`Temp Password: ${tempPassword}`);
+            console.log('=========================================');
+            return { mock: true };
+        }
+        
         const mailOptions = {
             from: `"JobMajunga Support" <${process.env.EMAIL_USER}>`,
             to: adminEmail,

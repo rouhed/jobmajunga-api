@@ -137,9 +137,13 @@ exports.forgotPassword = async (req, res) => {
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         await User.saveResetCode(email, code);
         const EmailService = require('../services/emailService');
-        await EmailService.sendResetCode(email, code);
+        const result = await EmailService.sendResetCode(email, code);
 
-        res.json({ message: 'Reset code sent successfully' });
+        res.json({ 
+            message: result.mock 
+                ? 'Mode Test : Code généré. Veuillez consulter les LOGS du serveur sur Render.com.' 
+                : 'Un code de réinitialisation a été envoyé à votre adresse email.' 
+        });
     } catch (error) {
         console.error('FORGOT PASSWORD ERROR:', error);
         res.status(500).json({ 
@@ -178,9 +182,13 @@ exports.recoverSubUser = async (req, res) => {
         await User.updatePassword(sub_email, tempPassword);
 
         const EmailService = require('../services/emailService');
-        await EmailService.sendRecruiterRecoveryToAdmin(admin_email, sub_email, tempPassword);
+        const result = await EmailService.sendRecruiterRecoveryToAdmin(admin_email, sub_email, tempPassword);
 
-        res.json({ message: 'Les accès ont été envoyés à l\'administrateur' });
+        res.json({ 
+            message: result.mock 
+                ? 'Mode Test : Accès générés. Veuillez consulter les LOGS du serveur sur Render.com.' 
+                : 'Les accès ont été envoyés par email à l\'administrateur.' 
+        });
     } catch (error) {
         console.error('RECOVER SUB USER ERROR:', error);
         res.status(500).json({ error: 'Erreur lors de la récupération du collaborateur' });
