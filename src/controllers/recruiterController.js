@@ -10,6 +10,8 @@ const fs = require('fs');
 const storage = multer.memoryStorage();
 const upload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 } }).single('photo');
 
+const NotificationService = require('../services/notificationService');
+
 // Helper: convert undefined to null for MySQL bind safety
 const safeNull = (val) => (val === undefined || val === '') ? null : val;
 
@@ -157,6 +159,24 @@ exports.updateApplicationStatus = async (req, res) => {
             await pool.execute(
                 'UPDATE applications SET status=?, updated_at=NOW() WHERE id=?',
                 [status, appId]
+            );
+        }
+
+        // Send notification to the candidate
+        const [[appInfo]] = await pool.execute(
+            `SELECT a.candidate_id, jo.title 
+             FROM applications a 
+             JOIN job_offers jo ON a.job_offer_id = jo.id 
+             WHERE a.id = ?`,
+            [appId]
+        );
+
+        if (appInfo) {
+            await NotificationService.notifyStatusChange(
+                appInfo.candidate_id,
+                appInfo.title,
+                status,
+                { date: interview_date || 'prochainement' }
             );
         }
 

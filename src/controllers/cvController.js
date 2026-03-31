@@ -68,11 +68,42 @@ const Profile = require('../models/profileModel');
 
 exports.exportPDF = async (req, res) => {
     try {
-        const cv = await CV.getById(req.params.id, req.user.id);
-        if (!cv) return res.status(404).json({ error: 'CV not found' });
+        const cvId = req.params.id;
+        const currentUserId = req.user.id;
+        const currentUserRole = req.user.role;
 
-        const sections = await CV.getSections(req.params.id);
-        const profile = await Profile.getByUserId(req.user.id);
+        let cv;
+        let candidateId;
+
+        if (currentUserRole === 'recruiter') {
+            // Check if recruiter has an application from this candidate with this CV
+            const companyId = req.user.parent_id || req.user.id;
+            const [application] = await pool.execute(
+                `SELECT a.candidate_id 
+                 FROM applications a 
+                 JOIN job_offers jo ON a.job_offer_id = jo.id 
+                 WHERE a.cv_id = ? AND jo.recruiter_id = ?`,
+                [cvId, companyId]
+            );
+
+            if (application.length === 0) {
+                return res.status(403).json({ error: 'Accès refusé : aucune candidature liée' });
+            }
+            
+            // Get CV without candidates' session restriction
+            const [cvRows] = await pool.execute('SELECT * FROM cvs WHERE id = ?', [cvId]);
+            cv = cvRows[0];
+            candidateId = application[0].candidate_id;
+        } else {
+            // Standard candidate access
+            cv = await CV.getById(cvId, currentUserId);
+            candidateId = currentUserId;
+        }
+
+        if (!cv) return res.status(404).json({ error: 'CV non trouvé' });
+
+        const sections = await CV.getSections(cvId);
+        const profile = await Profile.getByUserId(candidateId);
 
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename=cv_${req.params.id}.pdf`);

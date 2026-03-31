@@ -37,4 +37,18 @@ const authorize = (...roles) => {
     };
 };
 
-module.exports = { protect, authorize, authenticateToken: protect, authorizeRole: authorize };
+const optionalProtect = async (req, res, next) => {
+    let token;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        try {
+            token = req.headers.authorization.split(' ')[1];
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            req.user = { id: decoded.id, role: decoded.role, parent_id: decoded.parent_id };
+        } catch (error) {
+            // Ignore error for optional protect
+        }
+    }
+    next();
+};
+
+module.exports = { protect, authorize, authenticateToken: protect, authorizeRole: authorize, optionalProtect };
