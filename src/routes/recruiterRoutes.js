@@ -34,5 +34,6 @@ router.put('/password', rc.updatePassword);
 router.get('/sub-users', rc.getSubUsers);
 router.post('/sub-users', rc.createSubUser);
 router.delete('/sub-users/:id', rc.deleteSubUser);
+router.post('/sub-users/:id/reset-password', rc.resetSubUserPassword);
 
 module.exports = router;

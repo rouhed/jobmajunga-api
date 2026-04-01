@@ -396,3 +396,35 @@ exports.deleteSubUser = async (req, res) => {
         res.status(500).json({ error: 'Erreur lors de la suppression' });
     }
 };
+
+exports.resetSubUserPassword = async (req, res) => {
+    try {
+        if (req.user.parent_id) return res.status(403).json({ error: 'Accès refusé' });
+
+        const subUserId = req.params.id;
+        const [subUsers] = await pool.execute('SELECT email FROM users WHERE id = ? AND parent_id = ?', [subUserId, req.user.id]);
+        
+        if (subUsers.length === 0) {
+            return res.status(404).json({ error: 'Collaborateur non trouvé' });
+        }
+        
+        const subEmail = subUsers[0].email;
+        const [admins] = await pool.execute('SELECT email FROM users WHERE id = ?', [req.user.id]);
+        if (admins.length === 0) return res.status(404).json({ error: 'Administrateur introuvable' });
+        
+        const adminEmailFromDb = admins[0].email;
+
+        const EmailService = require('../services/emailService');
+        const tempPassword = Math.random().toString(36).slice(-10);
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+        await pool.execute('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, subUserId]);
+
+        await EmailService.sendRecruiterRecoveryToAdmin(adminEmailFromDb, subEmail, tempPassword);
+
+        res.json({ message: "Nouveaux accès envoyés à l'administrateur" });
+    } catch (error) {
+        console.error('[resetSubUserPassword] Error:', error);
+        res.status(500).json({ error: 'Erreur lors de la réinitialisation des accès' });
+    }
+};
