@@ -2,7 +2,7 @@ const pool = require('../config/db');
 
 class Job {
     static async findAll(filters) {
-        let query = 'SELECT jo.*, rp.name, rp.name as company_name, rp.photo_url, rp.photo_url as logo_url, rp.sector FROM job_offers jo JOIN recruiter_profiles rp ON jo.recruiter_id = rp.user_id WHERE jo.status = "published"';
+        let query = 'SELECT jo.*, rp.name, rp.name as company_name, rp.photo_url, rp.photo_url as logo_url, rp.sector, rp.description as company_desc FROM job_offers jo JOIN recruiter_profiles rp ON jo.recruiter_id = rp.user_id WHERE jo.status = "published"';
         const queryParams = [];
 
         if (filters.search) {
