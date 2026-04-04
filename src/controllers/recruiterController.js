@@ -144,9 +144,9 @@ exports.updateApplicationStatus = async (req, res) => {
         const appId = req.params.id;
 
         // Validate status
-        const validStatuses = ['sent', 'viewed', 'reviewing', 'interview', 'accepted', 'rejected'];
+        const validStatuses = ['sent', 'viewed', 'reviewing', 'interview', 'accepted', 'rejected', 'hired', 'interview_accepted', 'interview_declined', 'offer_accepted', 'offer_declined'];
         if (!validStatuses.includes(status)) {
-            return res.status(400).json({ error: 'Statut invalide' });
+            return res.status(400).json({ error: `Statut invalide: ${status}` });
         }
 
         // If scheduling an interview, update interview_date too
@@ -154,6 +154,11 @@ exports.updateApplicationStatus = async (req, res) => {
             await pool.execute(
                 'UPDATE applications SET status=?, interview_date=?, updated_at=NOW() WHERE id=?',
                 [status, interview_date, appId]
+            );
+        } else if ((status === 'hired' || status === 'accepted') && req.body.start_date) {
+            await pool.execute(
+                'UPDATE applications SET status=?, updated_at=NOW() WHERE id=?',
+                [status, appId]
             );
         } else {
             await pool.execute(
@@ -180,26 +185,20 @@ exports.updateApplicationStatus = async (req, res) => {
             );
         }
 
-        // AUTO-ARCHIVE: When accepting a candidate, archive the job offer and reject other applications
-        if (status === 'accepted') {
-            // Get the job_offer_id for this application
+    // AUTO-ARCHIVE: When hiring a candidate, archive the job offer
+        if (status === 'hired' || status === 'accepted') {
             const [[app]] = await pool.execute('SELECT job_offer_id FROM applications WHERE id=?', [appId]);
             if (app) {
                 const jobId = app.job_offer_id;
-                
-                // Archive the job offer (it's now filled)
                 await pool.execute(
                     "UPDATE job_offers SET status='archived', updated_at=NOW() WHERE id=?",
                     [jobId]
                 );
-
-                // Auto-reject all other applications for this job
                 await pool.execute(
-                    "UPDATE applications SET status='rejected', updated_at=NOW() WHERE job_offer_id=? AND id!=? AND status NOT IN ('accepted', 'rejected')",
+                    "UPDATE applications SET status='rejected', updated_at=NOW() WHERE job_offer_id=? AND id!=? AND status NOT IN ('hired','accepted','rejected')",
                     [jobId, appId]
                 );
-
-                console.log(`[acceptApplication] Job ${jobId} archived, other applications rejected`);
+                console.log(`[hireApplication] Job ${jobId} archived`);
             }
         }
 
@@ -207,6 +206,28 @@ exports.updateApplicationStatus = async (req, res) => {
     } catch (error) {
         console.error('[updateApplicationStatus] Error:', error);
         res.status(500).json({ error: 'Erreur lors de la mise à jour du statut' });
+    }
+};
+
+// Recruiter: Delete an application
+exports.deleteApplication = async (req, res) => {
+    try {
+        const companyId = req.user.parent_id || req.user.id;
+        // Verify recruiter owns the job linked to this application
+        const [[app]] = await pool.execute(
+            `SELECT a.id FROM applications a
+             JOIN job_offers jo ON a.job_offer_id = jo.id
+             WHERE a.id = ? AND jo.recruiter_id = ?`,
+            [req.params.id, companyId]
+        );
+        if (!app) {
+            return res.status(404).json({ error: 'Candidature introuvable ou accès refusé' });
+        }
+        await pool.execute('DELETE FROM applications WHERE id = ?', [req.params.id]);
+        res.json({ message: 'Candidature supprimée définitivement' });
+    } catch (error) {
+        console.error('[deleteApplication] Error:', error);
+        res.status(500).json({ error: 'Erreur lors de la suppression' });
     }
 };
 
