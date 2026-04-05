@@ -198,13 +198,15 @@ exports.recoverSubUser = async (req, res) => {
 exports.changePassword = async (req, res) => {
     const { oldPassword, newPassword } = req.body;
     try {
-        const user = await User.findById(req.user.id);
-        if (!user || !(await bcrypt.compare(oldPassword, user.password))) {
+        const pool = require('../config/db');
+        const [rows] = await pool.execute('SELECT email, password FROM users WHERE id = ?', [req.user.id]);
+        if (rows.length === 0 || !(await bcrypt.compare(oldPassword, rows[0].password))) {
             return res.status(401).json({ error: 'Ancien mot de passe incorrect' });
         }
-        await User.updatePassword(user.email, newPassword);
+        await User.updatePassword(rows[0].email, newPassword);
         res.json({ message: 'Mot de passe modifié avec succès' });
     } catch (error) {
+        console.error("CHANGE PASSWORD ERROR:", error);
         res.status(500).json({ error: 'Erreur lors de la modification du mot de passe' });
     }
 };
