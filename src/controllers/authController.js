@@ -194,3 +194,17 @@ exports.recoverSubUser = async (req, res) => {
         res.status(500).json({ error: 'Erreur lors de la récupération du collaborateur' });
     }
 };
+
+exports.changePassword = async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user || !(await bcrypt.compare(oldPassword, user.password))) {
+            return res.status(401).json({ error: 'Ancien mot de passe incorrect' });
+        }
+        await User.updatePassword(user.email, newPassword);
+        res.json({ message: 'Mot de passe modifié avec succès' });
+    } catch (error) {
+        res.status(500).json({ error: 'Erreur lors de la modification du mot de passe' });
+    }
+};

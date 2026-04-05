@@ -44,7 +44,7 @@ async function initDB() {
           title VARCHAR(200),
           location VARCHAR(150),
           bio TEXT,
-          photo_url VARCHAR(500),
+          photo_url LONGTEXT,
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
@@ -52,7 +52,7 @@ async function initDB() {
         CREATE TABLE recruiter_profiles (
           user_id INT UNSIGNED PRIMARY KEY,
           company_name VARCHAR(200) NOT NULL,
-          logo_url VARCHAR(500),
+          logo_url LONGTEXT,
           description TEXT,
           website VARCHAR(300),
           sector VARCHAR(100),

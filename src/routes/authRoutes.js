@@ -8,6 +8,8 @@ const validate = (req, res, next) => {
     next();
 };
 
+const { authenticateToken } = require('../middleware/auth');
+
 router.post('/register', authController.register);
 router.post('/login', authController.login);
 router.post('/logout', authController.logout);
@@ -15,5 +17,6 @@ router.post('/refresh', authController.refresh);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
 router.post('/recover-sub-user', authController.recoverSubUser);
+router.put('/password', authenticateToken, authController.changePassword);
 
 module.exports = router;
