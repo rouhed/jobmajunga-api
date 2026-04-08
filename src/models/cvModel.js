@@ -20,7 +20,7 @@ class CV {
     static async create(userId, data) {
         const { title, templateName, cvType, fileUrl } = data;
         const [result] = await pool.execute(
-            'INSERT INTO cvs (candidate_id, title, template_id, cv_type, file_url) VALUES (?, ?, ?, ?, ?)',
+            'INSERT INTO cvs (candidate_id, title, template_name, cv_type, file_url) VALUES (?, ?, ?, ?, ?)',
             [userId, title, templateName || 'modern', cvType || 'builder', fileUrl || null]
         );
         return { id: result.insertId, ...data };
@@ -29,7 +29,7 @@ class CV {
     static async update(cvId, userId, data) {
         const { title, templateName, isDefault, cvType, fileUrl, colorTheme } = data;
         await pool.execute(
-            'UPDATE cvs SET title = ?, template_id = ?, is_default = ?, cv_type = ?, file_url = ?, color_theme = ? WHERE id = ? AND candidate_id = ?',
+            'UPDATE cvs SET title = ?, template_name = ?, is_default = ?, cv_type = ?, file_url = ?, color_theme = ? WHERE id = ? AND candidate_id = ?',
             [title, templateName || 'modern', isDefault ? 1 : 0, cvType || 'builder', fileUrl || null, colorTheme || '#2563EB', cvId, userId]
         );
         return { id: cvId, ...data };
