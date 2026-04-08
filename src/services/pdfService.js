@@ -5,108 +5,336 @@ class PDFService {
         const doc = new PDFDocument({
             margin: 0,
             size: 'A4',
-            info: { Title: `CV - ${userData.first_name} ${userData.last_name}` }
+            info: { Title: `CV - ${userData?.first_name || ''} ${userData?.last_name || ''}` }
         });
 
         doc.pipe(res);
 
-        if (cvData.template_name === 'classic') {
-            this.drawClassic(doc, cvData, userData);
-        } else if (cvData.template_name === 'creative') {
-            this.drawCreative(doc, cvData, userData);
+        // Parse color theme from cvData or use a default blue
+        const themeColor = cvData.color_theme || '#2563EB';
+
+        // Organize sections into a lookup map for easy access
+        const sectionsMap = {};
+        if (cvData.sections && Array.isArray(cvData.sections)) {
+            cvData.sections.forEach(s => {
+                sectionsMap[s.section_type] = s.content;
+            });
+        }
+
+        const firstName = userData?.first_name || '';
+        const lastName = userData?.last_name || '';
+        const title = cvData.title || userData?.title || 'Candidat';
+        const email = userData?.email || '';
+        const phone = userData?.phone || '';
+        const location = userData?.location || '';
+
+        // Choose layout based on template
+        if (cvData.template_id === 'classic' || cvData.template_name === 'classic') {
+            this._drawClassicLayout(doc, { firstName, lastName, title, email, phone, location, themeColor, sectionsMap });
         } else {
-            this.drawModern(doc, cvData, userData);
+            // 'modern' and 'creative' both use the 2-column Canva layout
+            this._drawModernLayout(doc, { firstName, lastName, title, email, phone, location, themeColor, sectionsMap });
         }
 
         doc.end();
     }
 
-    static drawModern(doc, cvData, userData) {
-        // --- Sidebar (Canva Style) ---
-        doc.rect(0, 0, 200, doc.page.height).fill('#F1F5F9');
+    // =========================================================================
+    //  MODERN / CREATIVE - 2 Column "Canva" Layout
+    // =========================================================================
+    static _drawModernLayout(doc, data) {
+        const { firstName, lastName, title, email, phone, location, themeColor, sectionsMap } = data;
+        const pageW = doc.page.width;   // 595
+        const pageH = doc.page.height;  // 842
+        const sidebarW = 210;
 
-        // --- Header in Sidebar ---
-        doc.fillColor('#1E293B').fontSize(22).font('Helvetica-Bold')
-            .text(`${userData.first_name} ${userData.last_name}`, 30, 50, { width: 140 });
+        // --- Left Sidebar Background ---
+        doc.rect(0, 0, sidebarW, pageH).fill(themeColor);
 
-        doc.fontSize(12).font('Helvetica')
-            .text(userData.title || 'Candidat', 30, 100, { width: 140 });
+        // --- Top Header Band (behind name) ---
+        doc.rect(sidebarW, 0, pageW - sidebarW, 100).fill(this._lightenColor(themeColor, 0.85));
 
-        // --- Contact ---
-        doc.fontSize(14).font('Helvetica-Bold').fillColor('#0EA5E9').text('Contact', 30, 160);
-        doc.fontSize(10).font('Helvetica').fillColor('#334155').text(userData.email, 30, 180);
-        doc.text(userData.phone || '', 30, 195);
-        doc.text(userData.location || 'Mahajanga', 30, 210);
+        // ===================== LEFT COLUMN =====================
+        let leftY = 40;
+        const leftX = 25;
+        const leftW = sidebarW - 50;
 
-        // --- Main Content ---
-        let y = 50;
-        const mainX = 230;
-        const mainWidth = 330;
+        // --- Name in sidebar ---
+        doc.fillColor('#FFFFFF').fontSize(22).font('Helvetica-Bold')
+            .text(`${firstName}`, leftX, leftY, { width: leftW });
+        leftY += doc.heightOfString(firstName, { width: leftW }) + 2;
+        doc.text(`${lastName}`, leftX, leftY, { width: leftW });
+        leftY += doc.heightOfString(lastName, { width: leftW }) + 5;
 
-        cvData.sections.forEach(section => {
-            doc.fontSize(16).font('Helvetica-Bold').fillColor('#1E293B').text(section.section_type.toUpperCase(), mainX, y);
-            y += 25;
+        // --- Title ---
+        doc.fontSize(10).font('Helvetica').fillColor('#FFFFFFCC')
+            .text(title, leftX, leftY, { width: leftW });
+        leftY += doc.heightOfString(title, { width: leftW }) + 25;
 
-            doc.fontSize(10).font('Helvetica').fillColor('#475569');
+        // --- CONTACT ---
+        leftY = this._drawSidebarSectionTitle(doc, 'CONTACT', leftX, leftY);
+        if (phone) { leftY = this._drawSidebarLine(doc, `📞  ${phone}`, leftX, leftY, leftW); }
+        if (email) { leftY = this._drawSidebarLine(doc, `✉  ${email}`, leftX, leftY, leftW); }
+        if (location) { leftY = this._drawSidebarLine(doc, `📍  ${location}`, leftX, leftY, leftW); }
+        leftY += 20;
 
-            if (Array.isArray(section.content)) {
-                section.content.forEach(item => {
-                    const title = item.title || item.company || item.school;
-                    if (title) {
-                        doc.font('Helvetica-Bold').text(title, mainX, y);
-                        y += 15;
-                    }
-                    if (item.subtitle || item.degree) {
-                        doc.font('Helvetica-Oblique').text(item.subtitle || item.degree, mainX, y);
-                        y += 15;
-                    }
-                    if (item.description) {
-                        doc.font('Helvetica').text(item.description, mainX, y, { width: mainWidth });
-                        y += doc.heightOfString(item.description, { width: mainWidth }) + 10;
-                    }
-                    y += 5;
-                });
-            } else {
-                doc.text(section.content.text || '', mainX, y, { width: mainWidth });
-                y += doc.heightOfString(section.content.text || '', { width: mainWidth }) + 20;
-            }
-            y += 20;
-        });
+        // --- LANGUES ---
+        const languages = sectionsMap['languages'];
+        if (languages && Array.isArray(languages) && languages.length > 0) {
+            leftY = this._drawSidebarSectionTitle(doc, 'LANGUES', leftX, leftY);
+            languages.forEach(lang => {
+                leftY = this._drawSidebarBullet(doc, lang, leftX, leftY, leftW);
+            });
+            leftY += 20;
+        }
+
+        // --- COMPETENCES ---
+        const skills = sectionsMap['skills'];
+        if (skills && Array.isArray(skills) && skills.length > 0) {
+            leftY = this._drawSidebarSectionTitle(doc, 'COMPÉTENCES', leftX, leftY);
+            skills.forEach(skill => {
+                leftY = this._drawSidebarBullet(doc, skill, leftX, leftY, leftW);
+            });
+            leftY += 20;
+        }
+
+        // --- CENTRES D'INTERET ---
+        const interests = sectionsMap['interests'];
+        if (interests && Array.isArray(interests) && interests.length > 0) {
+            leftY = this._drawSidebarSectionTitle(doc, "CENTRES D'INTÉRÊT", leftX, leftY);
+            interests.forEach(interest => {
+                leftY = this._drawSidebarBullet(doc, interest, leftX, leftY, leftW);
+            });
+        }
+
+        // ===================== RIGHT COLUMN =====================
+        let rightY = 25;
+        const rightX = sidebarW + 25;
+        const rightW = pageW - sidebarW - 50;
+
+        // --- Large Name Header ---
+        doc.fillColor('#1E293B').fontSize(26).font('Helvetica-Bold')
+            .text(`${firstName} ${lastName}`, rightX, rightY, { width: rightW });
+        rightY += doc.heightOfString(`${firstName} ${lastName}`, { width: rightW, fontSize: 26 }) + 5;
+        doc.fontSize(12).font('Helvetica').fillColor('#475569')
+            .text(title, rightX, rightY, { width: rightW });
+        rightY += 30;
+
+        // Separator line
+        rightY = Math.max(rightY, 110);
+        doc.moveTo(rightX, rightY).lineTo(rightX + rightW, rightY).lineWidth(0.5).strokeColor('#CBD5E1').stroke();
+        rightY += 20;
+
+        // --- PROFIL ---
+        const summary = sectionsMap['summary'];
+        if (summary && typeof summary === 'string' && summary.trim()) {
+            rightY = this._drawMainSectionTitle(doc, 'PROFIL', rightX, rightY, themeColor);
+            doc.fontSize(10).font('Helvetica').fillColor('#475569')
+                .text(summary, rightX, rightY, { width: rightW, lineGap: 3 });
+            rightY += doc.heightOfString(summary, { width: rightW }) + 20;
+        }
+
+        // --- EXPERIENCES ---
+        const experiences = sectionsMap['experiences'];
+        if (experiences && Array.isArray(experiences) && experiences.length > 0) {
+            rightY = this._drawMainSectionTitle(doc, 'EXPÉRIENCES PROFESSIONNELLES', rightX, rightY, themeColor);
+            experiences.forEach(exp => {
+                const company = exp.company || exp.title || '';
+                const subtitle = exp.subtitle || '';
+                const description = exp.description || '';
+
+                doc.fontSize(12).font('Helvetica-Bold').fillColor('#1E293B')
+                    .text(company, rightX, rightY, { width: rightW });
+                rightY += doc.heightOfString(company, { width: rightW }) + 2;
+
+                if (subtitle) {
+                    doc.fontSize(10).font('Helvetica-Oblique').fillColor('#64748B')
+                        .text(subtitle, rightX, rightY, { width: rightW });
+                    rightY += doc.heightOfString(subtitle, { width: rightW }) + 3;
+                }
+                if (description) {
+                    doc.fontSize(9).font('Helvetica').fillColor('#475569')
+                        .text(description, rightX + 10, rightY, { width: rightW - 10, lineGap: 2 });
+                    rightY += doc.heightOfString(description, { width: rightW - 10 }) + 10;
+                }
+                rightY += 5;
+            });
+            rightY += 10;
+        }
+
+        // --- FORMATIONS ---
+        const formations = sectionsMap['formations'];
+        if (formations && Array.isArray(formations) && formations.length > 0) {
+            rightY = this._drawMainSectionTitle(doc, 'FORMATION', rightX, rightY, themeColor);
+            formations.forEach(edu => {
+                const school = edu.school || edu.title || '';
+                const degree = edu.degree || edu.subtitle || '';
+                const description = edu.description || '';
+
+                doc.fontSize(12).font('Helvetica-Bold').fillColor('#1E293B')
+                    .text(school, rightX, rightY, { width: rightW });
+                rightY += doc.heightOfString(school, { width: rightW }) + 2;
+
+                if (degree) {
+                    doc.fontSize(10).font('Helvetica-Oblique').fillColor('#64748B')
+                        .text(degree, rightX, rightY, { width: rightW });
+                    rightY += doc.heightOfString(degree, { width: rightW }) + 3;
+                }
+                if (description) {
+                    doc.fontSize(9).font('Helvetica').fillColor('#475569')
+                        .text(description, rightX + 10, rightY, { width: rightW - 10, lineGap: 2 });
+                    rightY += doc.heightOfString(description, { width: rightW - 10 }) + 10;
+                }
+                rightY += 5;
+            });
+        }
     }
 
-    static drawClassic(doc, cvData, userData) {
-        doc.fillColor('#000000').fontSize(24).font('Helvetica-Bold')
-            .text(`${userData.first_name} ${userData.last_name}`, 50, 50);
+    // =========================================================================
+    //  CLASSIC - Single Column Layout
+    // =========================================================================
+    static _drawClassicLayout(doc, data) {
+        const { firstName, lastName, title, email, phone, location, themeColor, sectionsMap } = data;
 
-        doc.fontSize(14).font('Helvetica').text(userData.title || '', 50, 80);
-        doc.fontSize(10).text(`${userData.email} | ${userData.phone || ''} | ${userData.location || ''}`, 50, 100);
+        // Header
+        doc.rect(0, 0, doc.page.width, 90).fill(themeColor);
+        doc.fillColor('#FFFFFF').fontSize(24).font('Helvetica-Bold')
+            .text(`${firstName} ${lastName}`, 50, 25, { width: 500 });
+        doc.fontSize(12).font('Helvetica')
+            .text(title, 50, 55, { width: 500 });
 
-        doc.moveDown();
-        doc.moveTo(50, 115).lineTo(550, 115).stroke();
+        // Contact bar
+        doc.fillColor('#475569').fontSize(9).font('Helvetica')
+            .text(`${email}  |  ${phone}  |  ${location}`, 50, 105, { width: 500, align: 'center' });
+
+        doc.moveTo(50, 125).lineTo(545, 125).lineWidth(0.5).strokeColor('#CBD5E1').stroke();
 
         let y = 140;
-        cvData.sections.forEach(section => {
-            doc.fontSize(14).font('Helvetica-Bold').text(section.section_type.toUpperCase(), 50, y);
-            y += 20;
+        const x = 50;
+        const w = 495;
 
-            doc.fontSize(10).font('Helvetica');
-            if (Array.isArray(section.content)) {
-                section.content.forEach(item => {
-                    doc.font('Helvetica-Bold').text(item.title || item.company || '', 50, y);
-                    y += 15;
-                    doc.font('Helvetica').text(item.description || '', 70, y, { width: 480 });
-                    y += doc.heightOfString(item.description || '', { width: 480 }) + 15;
-                });
-            } else {
-                doc.text(section.content.text || '', 50, y, { width: 500 });
-                y += doc.heightOfString(section.content.text || '', { width: 500 }) + 20;
-            }
-        });
+        // Summary
+        const summary = sectionsMap['summary'];
+        if (summary && typeof summary === 'string' && summary.trim()) {
+            y = this._drawMainSectionTitle(doc, 'PROFIL', x, y, themeColor);
+            doc.fontSize(10).font('Helvetica').fillColor('#475569')
+                .text(summary, x, y, { width: w, lineGap: 3 });
+            y += doc.heightOfString(summary, { width: w }) + 20;
+        }
+
+        // Experiences
+        const experiences = sectionsMap['experiences'];
+        if (experiences && Array.isArray(experiences) && experiences.length > 0) {
+            y = this._drawMainSectionTitle(doc, 'EXPÉRIENCES', x, y, themeColor);
+            experiences.forEach(exp => {
+                doc.fontSize(11).font('Helvetica-Bold').fillColor('#1E293B')
+                    .text(exp.company || exp.title || '', x, y, { width: w });
+                y += 15;
+                if (exp.subtitle) {
+                    doc.fontSize(9).font('Helvetica-Oblique').fillColor('#64748B').text(exp.subtitle, x, y, { width: w });
+                    y += 13;
+                }
+                if (exp.description) {
+                    doc.fontSize(9).font('Helvetica').fillColor('#475569').text(exp.description, x + 10, y, { width: w - 10 });
+                    y += doc.heightOfString(exp.description, { width: w - 10 }) + 10;
+                }
+                y += 5;
+            });
+            y += 10;
+        }
+
+        // Formations
+        const formations = sectionsMap['formations'];
+        if (formations && Array.isArray(formations) && formations.length > 0) {
+            y = this._drawMainSectionTitle(doc, 'FORMATION', x, y, themeColor);
+            formations.forEach(edu => {
+                doc.fontSize(11).font('Helvetica-Bold').fillColor('#1E293B')
+                    .text(edu.school || edu.title || '', x, y, { width: w });
+                y += 15;
+                if (edu.degree || edu.subtitle) {
+                    doc.fontSize(9).font('Helvetica-Oblique').fillColor('#64748B').text(edu.degree || edu.subtitle, x, y, { width: w });
+                    y += 13;
+                }
+                y += 5;
+            });
+            y += 10;
+        }
+
+        // Skills
+        const skills = sectionsMap['skills'];
+        if (skills && Array.isArray(skills) && skills.length > 0) {
+            y = this._drawMainSectionTitle(doc, 'COMPÉTENCES', x, y, themeColor);
+            doc.fontSize(10).font('Helvetica').fillColor('#475569')
+                .text(skills.join('  •  '), x, y, { width: w });
+            y += doc.heightOfString(skills.join('  •  '), { width: w }) + 15;
+        }
+
+        // Languages
+        const languages = sectionsMap['languages'];
+        if (languages && Array.isArray(languages) && languages.length > 0) {
+            y = this._drawMainSectionTitle(doc, 'LANGUES', x, y, themeColor);
+            doc.fontSize(10).font('Helvetica').fillColor('#475569')
+                .text(languages.join('  •  '), x, y, { width: w });
+            y += doc.heightOfString(languages.join('  •  '), { width: w }) + 15;
+        }
+
+        // Interests
+        const interests = sectionsMap['interests'];
+        if (interests && Array.isArray(interests) && interests.length > 0) {
+            y = this._drawMainSectionTitle(doc, "CENTRES D'INTÉRÊT", x, y, themeColor);
+            doc.fontSize(10).font('Helvetica').fillColor('#475569')
+                .text(interests.join('  •  '), x, y, { width: w });
+        }
     }
 
-    static drawCreative(doc, cvData, userData) {
-        // Similar to drawModern but different colors/layout
-        this.drawModern(doc, cvData, userData);
+    // =========================================================================
+    //  HELPER METHODS
+    // =========================================================================
+
+    static _drawSidebarSectionTitle(doc, title, x, y) {
+        doc.fontSize(11).font('Helvetica-Bold').fillColor('#FFFFFF')
+            .text(title, x, y);
+        y += 16;
+        // Underline
+        doc.moveTo(x, y).lineTo(x + 50, y).lineWidth(1.5).strokeColor('#FFFFFFAA').stroke();
+        y += 10;
+        return y;
+    }
+
+    static _drawSidebarLine(doc, text, x, y, w) {
+        doc.fontSize(9).font('Helvetica').fillColor('#FFFFFFDD')
+            .text(text, x, y, { width: w });
+        y += doc.heightOfString(text, { width: w }) + 5;
+        return y;
+    }
+
+    static _drawSidebarBullet(doc, text, x, y, w) {
+        doc.fontSize(9).font('Helvetica').fillColor('#FFFFFFDD')
+            .text(`•  ${text}`, x, y, { width: w });
+        y += doc.heightOfString(`•  ${text}`, { width: w }) + 4;
+        return y;
+    }
+
+    static _drawMainSectionTitle(doc, title, x, y, themeColor) {
+        doc.fontSize(13).font('Helvetica-Bold').fillColor(themeColor || '#1E293B')
+            .text(title, x, y);
+        y += 18;
+        return y;
+    }
+
+    // Attempt to lighten a hex color for the header band
+    static _lightenColor(hex, factor) {
+        try {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            const lr = Math.round(r + (255 - r) * factor);
+            const lg = Math.round(g + (255 - g) * factor);
+            const lb = Math.round(b + (255 - b) * factor);
+            return `#${lr.toString(16).padStart(2, '0')}${lg.toString(16).padStart(2, '0')}${lb.toString(16).padStart(2, '0')}`;
+        } catch (e) {
+            return '#F1F5F9';
+        }
     }
 }
 

@@ -1,4 +1,5 @@
 const CV = require('../models/cvModel');
+const pool = require('../config/db');
 
 exports.getMyCVs = async (req, res) => {
     try {
@@ -32,13 +33,14 @@ exports.getCVDetail = async (req, res) => {
 
 exports.updateCV = async (req, res) => {
     try {
-        const { title, template_name, is_default, sections, cv_type, file_url } = req.body;
+        const { title, template_name, is_default, sections, cv_type, file_url, color_theme } = req.body;
         await CV.update(req.params.id, req.user.id, { 
             title, 
             templateName: template_name, 
             isDefault: is_default,
             cvType: cv_type,
-            fileUrl: file_url 
+            fileUrl: file_url,
+            colorTheme: color_theme
         });
 
         if (sections) {
@@ -119,7 +121,13 @@ exports.exportPDF = async (req, res) => {
         }
 
         const sections = await CV.getSections(cvId);
-        const profile = await Profile.getByUserId(candidateId);
+        const profile = await Profile.getByUserId(candidateId) || {};
+
+        // Fetch user email from users table (not stored in candidate_profiles)
+        const [userRows] = await pool.execute('SELECT email FROM users WHERE id = ?', [candidateId]);
+        if (userRows.length > 0) {
+            profile.email = userRows[0].email;
+        }
 
         await PDFService.generateCV({ ...cv, sections }, profile, res);
     } catch (error) {
