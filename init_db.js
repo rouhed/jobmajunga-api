@@ -87,6 +87,8 @@ async function initDB() {
           id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
           candidate_id INT UNSIGNED NOT NULL,
           title VARCHAR(255) NOT NULL,
+          cv_type ENUM('builder', 'pdf') DEFAULT 'builder',
+          file_url LONGTEXT,
           template_id VARCHAR(50) DEFAULT 'classic',
           color_theme VARCHAR(20) DEFAULT '#2563EB',
           is_public BOOLEAN DEFAULT FALSE,

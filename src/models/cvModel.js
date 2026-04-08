@@ -18,28 +18,41 @@ class CV {
     }
 
     static async create(userId, data) {
-        const { title, templateName } = data;
+        const { title, templateName, cvType, fileUrl } = data;
         const [result] = await pool.execute(
-            'INSERT INTO cvs (candidate_id, title, template_name) VALUES (?, ?, ?)',
-            [userId, title, templateName || 'modern']
+            'INSERT INTO cvs (candidate_id, title, template_name, cv_type, file_url) VALUES (?, ?, ?, ?, ?)',
+            [userId, title, templateName || 'classic', cvType || 'builder', fileUrl || null]
         );
         return { id: result.insertId, ...data };
     }
 
     static async update(cvId, userId, data) {
-        const { title, templateName, isDefault } = data;
+        const { title, templateName, isDefault, cvType, fileUrl } = data;
         await pool.execute(
-            'UPDATE cvs SET title = ?, template_name = ?, is_default = ? WHERE id = ? AND candidate_id = ?',
-            [title, templateName, isDefault ? 1 : 0, cvId, userId]
+            'UPDATE cvs SET title = ?, template_name = ?, is_default = ?, cv_type = ?, file_url = ? WHERE id = ? AND candidate_id = ?',
+            [title, templateName, isDefault ? 1 : 0, cvType || 'builder', fileUrl || null, cvId, userId]
         );
         return { id: cvId, ...data };
     }
 
     static async delete(cvId, userId) {
-        await pool.execute(
-            'DELETE FROM cvs WHERE id = ? AND candidate_id = ?',
-            [cvId, userId]
-        );
+        const client = await pool.getConnection();
+        try {
+            await client.beginTransaction();
+            // Secure delete by checking candidate_id first
+            const [cv] = await client.execute('SELECT id FROM cvs WHERE id = ? AND candidate_id = ?', [cvId, userId]);
+            if (cv.length === 0) throw new Error('CV not found or unauthorized');
+
+            await client.execute('DELETE FROM cv_sections WHERE cv_id = ?', [cvId]);
+            await client.execute('DELETE FROM applications WHERE cv_id = ?', [cvId]);
+            await client.execute('DELETE FROM cvs WHERE id = ?', [cvId]);
+            await client.commit();
+        } catch (error) {
+            await client.rollback();
+            throw error;
+        } finally {
+            client.release();
+        }
     }
 
     static async getSections(cvId) {
