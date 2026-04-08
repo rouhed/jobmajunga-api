@@ -32,8 +32,14 @@ exports.getCVDetail = async (req, res) => {
 
 exports.updateCV = async (req, res) => {
     try {
-        const { title, template_name, is_default, sections } = req.body;
-        await CV.update(req.params.id, req.user.id, { title, templateName: template_name, isDefault: is_default });
+        const { title, template_name, is_default, sections, cv_type, file_url } = req.body;
+        await CV.update(req.params.id, req.user.id, { 
+            title, 
+            templateName: template_name, 
+            isDefault: is_default,
+            cvType: cv_type,
+            fileUrl: file_url 
+        });
 
         if (sections) {
             await CV.updateSections(req.params.id, sections);
@@ -102,11 +108,18 @@ exports.exportPDF = async (req, res) => {
 
         if (!cv) return res.status(404).json({ error: 'CV non trouvé' });
 
-        const sections = await CV.getSections(cvId);
-        const profile = await Profile.getByUserId(candidateId);
-
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename=cv_${req.params.id}.pdf`);
+
+        if (cv.cv_type === 'pdf' && cv.file_url) {
+            // file_url format is "data:application/pdf;base64,...base64Data..."
+            const base64Data = cv.file_url.split(',')[1];
+            const pdfBuffer = Buffer.from(base64Data, 'base64');
+            return res.send(pdfBuffer);
+        }
+
+        const sections = await CV.getSections(cvId);
+        const profile = await Profile.getByUserId(candidateId);
 
         await PDFService.generateCV({ ...cv, sections }, profile, res);
     } catch (error) {
