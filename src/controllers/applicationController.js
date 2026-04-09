@@ -5,6 +5,22 @@ const pool = require('../config/db');
 exports.apply = async (req, res) => {
     try {
         const { jobOfferId, cvId } = req.body;
+
+        // Check if there's already an application
+        const [existing] = await pool.execute(
+            'SELECT id, status FROM applications WHERE candidate_id = ? AND job_offer_id = ?',
+            [req.user.id, jobOfferId]
+        );
+
+        if (existing.length > 0) {
+            if (existing[0].status === 'rejected') {
+                // Remove the rejected application so the candidate can apply again
+                await pool.execute('DELETE FROM applications WHERE id = ?', [existing[0].id]);
+            } else {
+                return res.status(409).json({ error: 'Vous avez déjà postulé à cette offre' });
+            }
+        }
+
         const result = await Application.create(req.user.id, jobOfferId, cvId);
 
         // Notify recruiter

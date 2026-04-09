@@ -155,11 +155,19 @@ exports.updateApplicationStatus = async (req, res) => {
                 'UPDATE applications SET status=?, interview_date=?, updated_at=NOW() WHERE id=?',
                 [status, interview_date, appId]
             );
-        } else if ((status === 'hired' || status === 'accepted') && req.body.start_date) {
-            await pool.execute(
-                'UPDATE applications SET status=?, updated_at=NOW() WHERE id=?',
-                [status, appId]
-            );
+        } else if (status === 'hired' || status === 'accepted') {
+            const hireDate = req.body.start_date || interview_date;
+            if (hireDate) {
+                await pool.execute(
+                    'UPDATE applications SET status=?, interview_date=?, updated_at=NOW() WHERE id=?',
+                    [status, hireDate, appId]
+                );
+            } else {
+                await pool.execute(
+                    'UPDATE applications SET status=?, updated_at=NOW() WHERE id=?',
+                    [status, appId]
+                );
+            }
         } else {
             await pool.execute(
                 'UPDATE applications SET status=?, updated_at=NOW() WHERE id=?',
