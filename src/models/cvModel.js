@@ -60,10 +60,20 @@ class CV {
             'SELECT * FROM cv_sections WHERE cv_id = ? ORDER BY id',
             [cvId]
         );
-        return rows.map(row => ({
-            ...row,
-            content: typeof row.content === 'string' ? JSON.parse(row.content) : row.content
-        }));
+        return rows.map(row => {
+            let parsedContent = row.content;
+            if (typeof row.content === 'string') {
+                try {
+                    parsedContent = JSON.parse(row.content);
+                } catch (e) {
+                    parsedContent = row.content;
+                }
+            }
+            return {
+                ...row,
+                content: parsedContent
+            };
+        });
     }
 
     static async updateSections(cvId, sections) {

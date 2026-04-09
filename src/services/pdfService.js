@@ -23,17 +23,21 @@ class PDFService {
 
         const firstName = userData?.first_name || '';
         const lastName = userData?.last_name || '';
-        const title = cvData.title || userData?.title || 'Candidat';
         const email = userData?.email || '';
         const phone = userData?.phone || '';
         const location = userData?.location || '';
+        
+        // title: Use the user's title, not the CV document's filename title
+        const title = userData?.title || '';
+        const photoUrl = userData?.photo_url || '';
+        const bio = userData?.bio || '';
 
         // Choose layout based on template
         if (cvData.template_id === 'classic' || cvData.template_name === 'classic') {
-            this._drawClassicLayout(doc, { firstName, lastName, title, email, phone, location, themeColor, sectionsMap });
+            this._drawClassicLayout(doc, { firstName, lastName, title, email, phone, location, themeColor, sectionsMap, photoUrl, bio });
         } else {
             // 'modern' and 'creative' both use the 2-column Canva layout
-            this._drawModernLayout(doc, { firstName, lastName, title, email, phone, location, themeColor, sectionsMap });
+            this._drawModernLayout(doc, { firstName, lastName, title, email, phone, location, themeColor, sectionsMap, photoUrl, bio });
         }
 
         doc.end();
@@ -59,23 +63,32 @@ class PDFService {
         const leftX = 25;
         const leftW = sidebarW - 50;
 
-        // --- Name in sidebar ---
-        doc.fillColor('#FFFFFF').fontSize(22).font('Helvetica-Bold')
-            .text(`${firstName}`, leftX, leftY, { width: leftW });
-        leftY += doc.heightOfString(firstName, { width: leftW }) + 2;
-        doc.text(`${lastName}`, leftX, leftY, { width: leftW });
-        leftY += doc.heightOfString(lastName, { width: leftW }) + 5;
-
-        // --- Title ---
-        doc.fontSize(10).font('Helvetica').fillColor('#FFFFFFCC')
-            .text(title, leftX, leftY, { width: leftW });
-        leftY += doc.heightOfString(title, { width: leftW }) + 25;
+        // --- Photo (If available) ---
+        if (data.photoUrl) {
+            try {
+                let base64str = data.photoUrl;
+                if (base64str.startsWith('data:image/')) {
+                    base64str = base64str.split(',')[1];
+                }
+                const imgBuffer = Buffer.from(base64str, 'base64');
+                const photoSize = 100;
+                const photoX = leftX + (leftW - photoSize) / 2;
+                
+                doc.save();
+                doc.circle(photoX + photoSize/2, leftY + photoSize/2, photoSize/2).clip();
+                doc.image(imgBuffer, photoX, leftY, { width: photoSize, height: photoSize });
+                doc.restore();
+                leftY += photoSize + 20;
+            } catch (err) {
+                console.error("Error rendering PDF photo:", err.message);
+            }
+        }
 
         // --- CONTACT ---
         leftY = this._drawSidebarSectionTitle(doc, 'CONTACT', leftX, leftY);
-        if (phone) { leftY = this._drawSidebarLine(doc, `📞  ${phone}`, leftX, leftY, leftW); }
-        if (email) { leftY = this._drawSidebarLine(doc, `✉  ${email}`, leftX, leftY, leftW); }
-        if (location) { leftY = this._drawSidebarLine(doc, `📍  ${location}`, leftX, leftY, leftW); }
+        if (phone) { leftY = this._drawSidebarLine(doc, `Tél:  ${phone}`, leftX, leftY, leftW); }
+        if (email) { leftY = this._drawSidebarLine(doc, `Email:  ${email}`, leftX, leftY, leftW); }
+        if (location) { leftY = this._drawSidebarLine(doc, `Adresse:  ${location}`, leftX, leftY, leftW); }
         leftY += 20;
 
         // --- LANGUES ---
@@ -126,7 +139,7 @@ class PDFService {
         rightY += 20;
 
         // --- PROFIL ---
-        const summary = sectionsMap['summary'];
+        const summary = sectionsMap['summary'] || data.bio;
         if (summary && typeof summary === 'string' && summary.trim()) {
             rightY = this._drawMainSectionTitle(doc, 'PROFIL', rightX, rightY, themeColor);
             doc.fontSize(10).font('Helvetica').fillColor('#475569')
@@ -199,9 +212,29 @@ class PDFService {
         // Header
         doc.rect(0, 0, doc.page.width, 90).fill(themeColor);
         doc.fillColor('#FFFFFF').fontSize(24).font('Helvetica-Bold')
-            .text(`${firstName} ${lastName}`, 50, 25, { width: 500 });
+            .text(`${firstName} ${lastName}`, 50, 25, { width: 400 });
         doc.fontSize(12).font('Helvetica')
-            .text(title, 50, 55, { width: 500 });
+            .text(title, 50, 55, { width: 400 });
+
+        // --- Photo (If available) ---
+        if (data.photoUrl) {
+            try {
+                let base64str = data.photoUrl;
+                if (base64str.startsWith('data:image/')) {
+                    base64str = base64str.split(',')[1];
+                }
+                const imgBuffer = Buffer.from(base64str, 'base64');
+                const photoSize = 70;
+                const photoX = doc.page.width - 50 - photoSize;
+                
+                doc.save();
+                doc.circle(photoX + photoSize/2, 10 + photoSize/2, photoSize/2).clip();
+                doc.image(imgBuffer, photoX, 10, { width: photoSize, height: photoSize });
+                doc.restore();
+            } catch (err) {
+                console.error("Error rendering PDF photo:", err.message);
+            }
+        }
 
         // Contact bar
         doc.fillColor('#475569').fontSize(9).font('Helvetica')
@@ -214,7 +247,7 @@ class PDFService {
         const w = 495;
 
         // Summary
-        const summary = sectionsMap['summary'];
+        const summary = sectionsMap['summary'] || data.bio;
         if (summary && typeof summary === 'string' && summary.trim()) {
             y = this._drawMainSectionTitle(doc, 'PROFIL', x, y, themeColor);
             doc.fontSize(10).font('Helvetica').fillColor('#475569')
