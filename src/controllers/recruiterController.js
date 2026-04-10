@@ -193,22 +193,8 @@ exports.updateApplicationStatus = async (req, res) => {
             );
         }
 
-    // AUTO-ARCHIVE: When hiring a candidate, archive the job offer
-        if (status === 'hired' || status === 'accepted') {
-            const [[app]] = await pool.execute('SELECT job_offer_id FROM applications WHERE id=?', [appId]);
-            if (app) {
-                const jobId = app.job_offer_id;
-                await pool.execute(
-                    "UPDATE job_offers SET status='archived', updated_at=NOW() WHERE id=?",
-                    [jobId]
-                );
-                await pool.execute(
-                    "UPDATE applications SET status='rejected', updated_at=NOW() WHERE job_offer_id=? AND id!=? AND status NOT IN ('hired','accepted','rejected')",
-                    [jobId, appId]
-                );
-                console.log(`[hireApplication] Job ${jobId} archived`);
-            }
-        }
+        // The auto-archive logic was removed here because jobs should remain accessible
+        // for other candidates to apply to, until the recruiter manually archives the job.
 
         res.json({ message: 'Statut mis à jour' });
     } catch (error) {
