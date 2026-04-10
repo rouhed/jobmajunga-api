@@ -13,7 +13,7 @@ exports.apply = async (req, res) => {
         );
 
         if (existing.length > 0) {
-            if (existing[0].status === 'rejected') {
+            if (['rejected', 'interview_declined', 'offer_declined'].includes(existing[0].status)) {
                 // Remove the rejected application so the candidate can apply again
                 await pool.execute('DELETE FROM applications WHERE id = ?', [existing[0].id]);
             } else {
@@ -107,6 +107,14 @@ exports.updateStatus = async (req, res) => {
                 statusMessages[status] || `Décision candidat: ${status}`,
                 'application_update',
                 appId
+            );
+        }
+
+        // If candidate declined the offer, un-archive the job offer so it reappears and they can try again
+        if (status === 'offer_declined') {
+            await pool.execute(
+                "UPDATE job_offers SET status='published', updated_at=NOW() WHERE id=?",
+                [app.job_offer_id]
             );
         }
 
